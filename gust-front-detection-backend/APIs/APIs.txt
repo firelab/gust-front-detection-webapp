@@ -1,0 +1,11 @@
+1) one that returns the stations and the coords
+
+2) select the station and gets passed to the algorithm runne API 2 will store
+
+3) will request the data from that. If 2 people request the data within a time frame
+
+the output comes out and goes to the subdirectory with data
+
+the front end will go and retrieve the images in data
+
+3 APIs

@@ -1,0 +1,7 @@
+Robert and cole will have content that points to this folder
+
+services that exist on the backend and when you get the http request here
+
+all they need to do is point it to the path back here 
+
+Will and Eoghan will make the backend server stuff and make sure that it does what is being asked
