@@ -16,9 +16,8 @@ How to setup dependencies for project.
 
 To build the frontend:
 
-
 1. Clone this repository with `git clone`
-2. Navigate to the frontend directory `cd /gust-front-detection-webapp/gust-front-detection-frontend`
+2. Navigate to the frontend directory with `cd /gust-front-detection-webapp/frontend`
 3. Install packages with `npm install`
 4. Run frontend with `npm run dev`
 
