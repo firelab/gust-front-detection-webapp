@@ -1,5 +1,5 @@
 {/* Note that the leaflet map requires a defined height. */}
-{/* When making changes, Vite HMR has inconsistent behavior, be sure to *fully* reload the page */}
+{/* Vite hot reload has inconsistent behavior when making changes to the map, be sure to *fully* reload the page */}
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { MapContainer, TileLayer } from 'react-leaflet'
@@ -31,7 +31,7 @@ function DisplayPosition({ map }) {
     <p>
       latitude: {position.lat.toFixed(4)}, longitude: {position.lng.toFixed(4)}{' '}
       <Button onClick={onClick} variant="outlined" color="primary">
-        reset
+        Reset Position
       </Button>
     </p>
   )
