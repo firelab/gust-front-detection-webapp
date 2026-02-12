@@ -1,0 +1,7 @@
+1) Station List request (returns list of stations and their coordinates)
+
+2) NFGDArunner - Algorithm Runner API (takes station and time frame, returns job ID, success/failure, frames storage URL)
+
+3) Frame Data API (takes job ID, returns list of frames)
+
+4) Algorithm/Job Status API (takes job ID, returns status)
