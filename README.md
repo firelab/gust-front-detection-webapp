@@ -24,8 +24,16 @@ To build the frontend:
 The frontend is now accessible at `http://localhost:5173/`
 
 # Backend
-How to build the backend. 
+TODO: Add instructions on how to build and run the backend.
 
+Backend directory structure: 
+    - app.py contains the API endpoints
+    - apis/ contains the API endpoint definitions
+        - api definitions found here call logic defined in src/
+    - src/ contains the backend logic
+        - Not responsible for API endpoints that orchestrate or handle HTTP requests
+        - Contains the business logic of the application only
+        
 # Docker
 Describe how to containerize and run the project
 
