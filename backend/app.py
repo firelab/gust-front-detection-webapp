@@ -1,13 +1,25 @@
 from flask import Flask, jsonify, request
+from apis.stations import list_stations
+from src.station_service.station_service import StationService
 
 app = Flask(__name__)
+
+station_service = StationService()
 
 
 # Station List API
 @app.route("/APIs/stations", methods=["GET"])
-def list_stations():
-    """Returns list of stations and their coordinates."""
-    pass
+def stations_endpoint():
+    """
+    Returns:
+        GeoJSON FeatureCollection of stations with properties 
+            station_id, name, and altitude, and Point geometry, with a 200 status code.
+        
+        OR (on failure)
+        
+        JSON error message with a 404 status code.
+    """
+    return list_stations(station_service)
 
 
 # Algorithm Runner API

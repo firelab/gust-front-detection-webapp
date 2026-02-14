@@ -25,3 +25,6 @@ dist-ssr
 
 # Backend notes Will
 gust-front-detection-backend/notes.txt
+
+# virtual environment
+*/.venv/
