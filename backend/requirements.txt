@@ -1,1 +1,7 @@
-Flask
+Flask>=3.0.0
+numpy>=1.26.4
+scipy>=1.16.1
+matplotlib>=3.10.6
+scikit-image>=0.25.2
+arm_pyart>=2.1.1
+nexradaws>=2.0.0
