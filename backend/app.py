@@ -1,10 +1,7 @@
 from flask import Flask, jsonify, request
-from apis.stations import list_stations
-from src.station_service.station_service import StationService
+from apis.stations import list_stations_api
 
 app = Flask(__name__)
-
-station_service = StationService()
 
 
 # Station List API
@@ -19,7 +16,7 @@ def stations_endpoint():
         
         JSON error message with a 404 status code.
     """
-    return list_stations(station_service)
+    return list_stations_api()
 
 
 # Algorithm Runner API
