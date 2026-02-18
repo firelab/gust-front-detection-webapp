@@ -11,6 +11,9 @@ RUN pip install -r requirements.txt
 # Copy the rest of the application code
 COPY . .
 
+#Makes sure that their code is ran properly
+RUN cd /app/APIs/NFGDArunner/NFGDA && pip install -e .
+
 # Expose port 5000
 EXPOSE 5000
 
