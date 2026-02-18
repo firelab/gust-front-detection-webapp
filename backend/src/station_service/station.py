@@ -5,7 +5,8 @@ from dataclasses import dataclass
 class Station:
     """Represents a weather station with its geographic coordinates."""
 
-    id: str
+    station_id: str
     name: str
     lat: float
     lon: float
+    altitude: float
