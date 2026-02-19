@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { MapContainer, TileLayer } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import Button from '@mui/material/Button'
+import GeotiffLayer from './GeoTiffLayer'
 
 const center = [40.0, -98.0]
 const zoom = 5
@@ -53,6 +54,7 @@ export default function LeafletMap() {
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
+        <GeotiffLayer />
       </MapContainer>
     ),
     [],
