@@ -16,10 +16,11 @@
     "@mui/icons-material": "^7.3.7",
     "@mui/material": "^7.3.7",
     "@tailwindcss/vite": "^4.1.18",
-    "leaflet": "^1.9.4",
-    "react": "^19.0.0-rc.1",
-    "react-dom": "^19.0.0-rc.1",
-    "react-leaflet": "^5.0.0-rc.2",
+    "georaster-layer-for-leaflet": "^4.1.2",
+    "leaflet": "1.9",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-leaflet": "^4.2.1",
     "tailwindcss": "^4.1.18"
   },
   "devDependencies": {
