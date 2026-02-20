@@ -10,6 +10,7 @@ class NfgdaService:
     def __init__(
         self,
         runner: NfgdaRunner,
+        job_queue: (Job),
         job_store: JobStore,
         asset_store: AssetStore,
         default_out_prefix: str,

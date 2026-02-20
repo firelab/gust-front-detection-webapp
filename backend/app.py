@@ -1,8 +1,12 @@
+import uuid
 from flask import Flask, jsonify, request
 from apis.stations import list_stations_api
-
+from apis.run_request import start_algorithm_run
+from src.nfgda_service.nfgda_service import NfgdaService
+from src.nfgda_service.models import Job
 app = Flask(__name__)
 
+nfgda_service = NfgdaService()
 
 # Station List API
 @app.route("/APIs/stations", methods=["GET"])
@@ -22,9 +26,9 @@ def stations_endpoint():
 # Algorithm Runner API
 @app.route("/APIs/run", methods=["POST"])
 def start_run():
-    """Takes station and time frame, starts NFGDA job, returns job ID."""
-    pass
-
+    """Takes station and time frame args, kicks off an NFGDA processing job, and returns the new job ID and status."""
+    return start_algorithm_run(dict(request.json))
+    
 
 # Frame Data API
 @app.route("/APIs/frames/<job_id>", methods=["GET"])
