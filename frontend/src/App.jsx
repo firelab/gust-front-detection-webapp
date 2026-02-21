@@ -1,6 +1,6 @@
 import Container from '@mui/material/Container';
 import 'leaflet/dist/leaflet.css';
-import LeafletMap from './LeafletMap'
+import LeafletMap from './components/LeafletMap'
 
 export default function App() {
 

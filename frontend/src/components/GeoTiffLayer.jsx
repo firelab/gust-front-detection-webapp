@@ -10,7 +10,7 @@ export default function GeotiffLayer() {
     let layer;
 
     async function loadTiff() {
-      const response = await fetch("/radar_reflectivity_utm.tif");
+      const response = await fetch("/radar_reflectivity_3857.tif"); // currently this is a hardcoded file in frontend/public
       const buffer = await response.arrayBuffer();
       const georaster = await parseGeoraster(buffer);
 
