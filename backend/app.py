@@ -1,8 +1,13 @@
+import uuid
+import redis
 from flask import Flask, jsonify, request
 from apis.stations import list_stations_api
+from apis.run_request import send_job_to_redis_queue
 
 app = Flask(__name__)
 
+# Connect to the Redis container
+redis_client = redis.Redis(host='redis', port=6379, db=0, decode_responses=True)
 
 # Station List API
 @app.route("/APIs/stations", methods=["GET"])
@@ -22,9 +27,12 @@ def stations_endpoint():
 # Algorithm Runner API
 @app.route("/APIs/run", methods=["POST"])
 def start_run():
-    """Takes station and time frame, starts NFGDA job, returns job ID."""
-    pass
-
+    """Takes station and time frame args, kicks off an NFGDA processing job, and returns the new job ID and status code."""
+    if not request.json:
+        return jsonify({"error": "Missing request body"}), 400
+    
+    return send_job_to_redis_queue(redis_client, dict(request.json))
+    
 
 # Frame Data API
 @app.route("/APIs/frames/<job_id>", methods=["GET"])

@@ -45,8 +45,8 @@ radar_lon = args.radar_lon
 # ---------------------------
 # Other parameters
 # ---------------------------
-utm_tif = "radar_reflectivity_utm.tif"
-final_tif = "radar_reflectivity_latlon.tif"
+ae_tif = "radar_reflectivity_ae.tif"
+final_tif = "radar_reflectivity_3857.tif"
 
 pixel_size_m = 500.0   # 500 m spacing
 channel_index = 1      # channel 1 (0-based)
@@ -65,37 +65,25 @@ ny, nx = refl.shape
 print(f"ny, nx = {ny, nx}")
 
 # ---------------------------
-# Determine best-fit UTM zone
-# ---------------------------
-utm_zone = int((radar_lon + 180) / 6) + 1
-print(f"utm_zone = {utm_zone}")
-is_northern = radar_lat >= 0
-print(f"is_northern = {is_northern}")
-epsg_utm = 32600 + utm_zone if is_northern else 32700 + utm_zone
-print(f"epsg_utm = {epsg_utm}")
-
-# ---------------------------
 # Spatial references
+# use Azimuthal Equidistant for radar data
+# no EPSG code, parameterize instead
 # ---------------------------
-utm_srs = osr.SpatialReference()
-utm_srs.ImportFromEPSG(epsg_utm)
-print(f"utm_srs = {utm_srs}")
-
-wgs84 = osr.SpatialReference()
-wgs84.ImportFromEPSG(4326)
-
-# ---------------------------
-# Transform radar center to UTM
-# ---------------------------
-to_utm = osr.CoordinateTransformation(wgs84, utm_srs)
-center_x, center_y, _ = to_utm.TransformPoint(radar_lat, radar_lon)
-print(f"center_x, center_y = {center_x, center_y}")
+ae_srs = osr.SpatialReference()
+ae_srs.SetAE(
+    radar_lat,   # latitude of projection center
+    radar_lon,   # longitude of projection center
+    0.0,         # false easting
+    0.0          # false northing
+)
+ae_srs.SetWellKnownGeogCS("WGS84")
+print(ae_srs.ExportToPrettyWkt())
 
 # ---------------------------
-# GeoTransform (centered grid)
+# GeoTransform (centered on radar)
 # ---------------------------
-origin_x = center_x - (nx / 2) * pixel_size_m
-origin_y = center_y + (ny / 2) * pixel_size_m
+origin_x = - (nx / 2) * pixel_size_m
+origin_y = (ny / 2) * pixel_size_m
 print(f"origin_x, origin_y = {origin_x, origin_y}")
 
 geotransform = (
@@ -108,11 +96,11 @@ geotransform = (
 )
 
 # ---------------------------
-# Write UTM GeoTIFF
+# Write Azmithual Equidistant GeoTIFF
 # ---------------------------
 driver = gdal.GetDriverByName("GTiff")
-utm_ds = driver.Create(
-    utm_tif,
+ae_ds = driver.Create(
+    ae_tif,
     nx,
     ny,
     1,
@@ -120,29 +108,76 @@ utm_ds = driver.Create(
     options=["COMPRESS=LZW", "TILED=YES"]
 )
 
-utm_ds.SetGeoTransform(geotransform)
-utm_ds.SetProjection(utm_srs.ExportToWkt())
+ae_ds.SetGeoTransform(geotransform)
+ae_ds.SetProjection(ae_srs.ExportToWkt())
 
-band = utm_ds.GetRasterBand(1)
+band = ae_ds.GetRasterBand(1)
 band.WriteArray(refl)
 band.SetNoDataValue(-9999)
 
-band.FlushCache()
-utm_ds.FlushCache()
-utm_ds = None
+ae_ds = None
 
 # ---------------------------
-# Reproject to EPSG:4326
+# Reproject to EPSG:3857 for leaflet
 # ---------------------------
-gdal.Warp(
-    final_tif,
-    utm_tif,
-    dstSRS="EPSG:4326",
-    resampleAlg=gdal.GRA_Bilinear,
-    format="GTiff",
-    creationOptions=["COMPRESS=LZW", "TILED=YES"]
+warped_ds = gdal.Warp(
+    "",
+    ae_tif,
+    dstSRS="EPSG:3857",
+    resampleAlg=gdal.GRA_NearestNeighbour,
+    format="MEM",
+    dstNodata=-9999
 )
 
+# ---------------------------
+# Fill nodata collar in EPSG:3857 output
+# ---------------------------
+band = warped_ds.GetRasterBand(1)
+
+nodata = band.GetNoDataValue()
+if nodata is None:
+    nodata = -9999
+    band.SetNoDataValue(nodata)
+
+# Expand nearest valid pixels into nodata areas
+gdal.FillNodata(
+    targetBand=band,
+    maskBand=None,
+    maxSearchDist=200,        # pixels to search outward (adjust if needed)
+    smoothingIterations=0     # 0 keeps nearest-neighbor style behavior
+)
+
+band.FlushCache()
+warped_ds.FlushCache()
+
+# ---------------------------
+# Verify no nodata remains
+# ---------------------------
+arr = band.ReadAsArray()
+nodata = band.GetNoDataValue()
+
+if nodata is None:
+    print("Warning: No nodata value defined on band.")
+else:
+    remaining = np.count_nonzero(arr == nodata)
+
+if remaining == 0:
+    print("Success: No nodata pixels remain in band.")
+else:
+    print(f"Warning: {remaining} nodata pixels still present. Try increasing maxSearchDist.")
+
+# ---------------------------
+# Write final GeoTIFF
+# ---------------------------
+driver = gdal.GetDriverByName("GTiff")
+driver.CreateCopy(
+    final_tif,
+    warped_ds,
+    options=["COMPRESS=LZW", "TILED=YES"]
+)
+
+warped_ds = None
+
 print("Done.")
-print(f"Intermediate UTM GeoTIFF: {utm_tif} (EPSG:{epsg_utm})")
-print(f"Final lat/lon GeoTIFF:   {final_tif} (EPSG:4326)")
+print(f"Intermediate Azimuthal Equidistant GeoTIFF: {ae_tif} (EPSG:54032)")
+print(f"Final lat/lon GeoTIFF: {final_tif} (EPSG:3857)")

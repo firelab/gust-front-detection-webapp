@@ -7,6 +7,7 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Frontend Files
 node_modules
 dist
 dist-ssr
@@ -23,8 +24,11 @@ dist-ssr
 *.sln
 *.sw?
 
-# Backend notes Will
+# Will's Backend notes
 gust-front-detection-backend/notes.txt
 
-# virtual environment
+# Python Files
 */.venv/
+*/.env/
+**/__pycache__/
+*.py[cod]

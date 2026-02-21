@@ -5,3 +5,5 @@ matplotlib>=3.10.6
 scikit-image>=0.25.2
 arm_pyart>=2.1.1
 nexradaws>=2.0.0
+redis>=7.2.0
+
