@@ -5,27 +5,6 @@ export default function RadarStations({value, onChange}){
 
     const[stations, setStations] = useState([]);
 
-    useEffect(() => {
-        async function loadStations() {
-            let nextStations = [];
-
-            const response = await fetch("/APIs/stations");
-            const geoJson = await response.json();
-
-            if(geoJson !== null && geoJson !== undefined){ //blank
-                if(Array.isArray(geoJson.features)){
-                    nextStations = geoJson.features;
-                }    
-            }
-            setStations(nextStations);
-        }
-        loadStations();
-       }, [])
-
-       function handleChange(event){
-        const selectedValue = event.target.value;
-        onChange(selectedValue);
-       }
 
        return (
         <select value={value} onChange={handleChange}>
