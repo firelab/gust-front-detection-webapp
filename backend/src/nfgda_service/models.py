@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
+import uuid
 from typing import Dict, List
 
 
@@ -43,10 +44,11 @@ class RunRequest:
 class Job:
     """Tracks the state of a single NFGDA processing job."""
 
-    id: str
+    id: uuid.UUID
     status: JobStatus
     error: str = ""
     output_path: str = ""
+    run_request: RunRequest = None
 
 
 @dataclass
