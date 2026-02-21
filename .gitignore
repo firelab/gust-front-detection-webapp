@@ -28,3 +28,7 @@ gust-front-detection-backend/notes.txt
 
 # virtual environment
 */.venv/
+
+# Python Binaries
+__pycache__/
+*.py[cod]
