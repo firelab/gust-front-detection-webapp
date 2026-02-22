@@ -4,10 +4,6 @@ from enum import Enum
 import uuid
 from typing import Dict, List
 
-
-# ── Enums ─────────────────────────────────────────────────────────────────────
-
-
 class JobStatus(Enum):
     """Lifecycle status of an NFGDA processing job."""
 
@@ -15,10 +11,6 @@ class JobStatus(Enum):
     RUNNING = "RUNNING"
     COMPLETE = "COMPLETE"
     FAILED = "FAILED"
-
-
-# ── Value Objects ─────────────────────────────────────────────────────────────
-
 
 @dataclass
 class GeoBounds:
