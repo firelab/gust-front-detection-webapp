@@ -1,25 +1,17 @@
 {/* Note that the leaflet map requires a defined height. */}
 {/* Vite hot reload has inconsistent behavior when making changes to the map, be sure to *fully* reload the page */}
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { MapContainer, TileLayer } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
-import Button from '@mui/material/Button'
 import GeotiffLayer from './GeoTiffLayer'
 
-const center = [40.0, -98.0]
-const zoom = 5
 
-function DisplayPosition({ map }) {
-  const [position, setPosition] = useState(() => map.getCenter())
-
-  const onClick = useCallback(() => {
-    map.setView(center, zoom)
-  }, [map])
+function DisplayPosition({ map, mapLatLng, setMapLatLng }) {
 
   const onMove = useCallback(() => {
-    setPosition(map.getCenter())
-  }, [map])
+    setMapLatLng(map.getCenter())
+  }, [map, setMapLatLng])
 
   useEffect(() => {
     map.on('move', onMove)
@@ -30,22 +22,41 @@ function DisplayPosition({ map }) {
 
   return (
     <p>
-      latitude: {position.lat.toFixed(4)}, longitude: {position.lng.toFixed(4)}{' '}
-      <Button onClick={onClick} variant="outlined" color="primary">
-        Reset Position
-      </Button>
+      latitude: {mapLatLng.lat.toFixed(4)}, longitude: {mapLatLng.lng.toFixed(4)}{' '}
     </p>
   )
 }
 
-export default function LeafletMap() {
-  const [map, setMap] = useState(null)
 
-  const displayMap = useMemo(
-    () => (
+export default function LeafletMap({
+  stations = [],
+  selectedStation,
+  setSelectedStation
+}) {
+  const [map, setMap] = useState(null)
+  const [mapLatLng, setMapLatLng] = useState({"lat":48.0,"lng":98.0});
+
+    useEffect(() => {
+      if (!map || !selectedStation) return
+      const [lng, lat] = selectedStation.geometry.coordinates
+      const latLng = [lat, lng]
+      map.setView(latLng, 8)
+      setMapLatLng(map.getCenter())
+    }, [selectedStation, map, setMapLatLng])
+
+  return (
+    <div>
+      {map && (
+        <DisplayPosition
+          map={map}
+          mapLatLng={mapLatLng}
+          setMapLatLng={setMapLatLng}
+        />
+      )}
+
       <MapContainer
-        center={center}
-        zoom={zoom}
+        center={mapLatLng}
+        zoom={5}
         scrollWheelZoom={false}
         style={{ height: '400px', width: '100%' }}
         ref={setMap}
@@ -56,14 +67,6 @@ export default function LeafletMap() {
         />
         <GeotiffLayer />
       </MapContainer>
-    ),
-    [],
-  )
-
-  return (
-    <div>
-      {map ? <DisplayPosition map={map} /> : null}
-      {displayMap}
     </div>
   )
 }

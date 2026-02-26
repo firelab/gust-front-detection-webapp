@@ -28,16 +28,19 @@ export default function App() {
 
   return (
     <Container maxWidth="md">
-        <p className='font-bold mt-8'>Leaflet Map</p>
         <div className='mt-4'>
-        <RadarStationDropdown
-          stations={stations}
-          value={selectedStation}
-          onChange={setSelectedStation}
-        />
+          <RadarStationDropdown
+            stations={stations}
+            selectedStation={selectedStation}
+            setSelectedStation={setSelectedStation}
+          />
         </div>
         <Container className='bg-gray-200 min-h-100 mt-8' >
-          <LeafletMap/>
+          <LeafletMap
+            stations={stations} // we'll use this later to display stations on the map
+            selectedStation={selectedStation}
+            setSelectedStation={setSelectedStation} // we'll use this later
+          />
         </Container>
         
     </Container>
