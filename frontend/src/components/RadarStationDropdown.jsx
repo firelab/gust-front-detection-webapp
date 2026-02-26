@@ -1,12 +1,25 @@
-export default function RadarStationDropdown({ stations = [], value, onChange }) {
+export default function RadarStationDropdown({
+  stations = [],
+  selectedStation,
+  setSelectedStation
+}) {
+  const stationsArr = Array.isArray(stations) ? stations : []
+
   function handleChange(event) {
-    onChange(event.target.value);
+    const stationID = event.target.value
+
+    const stationObj = stationsArr.find(
+      s => s?.properties?.station_id === stationID
+    )
+
+    setSelectedStation(stationObj || null)
   }
 
-  const stationsArr = Array.isArray(stations) ? stations : [];
-
   return (
-    <select value={value} onChange={handleChange}>
+    <select
+      value={selectedStation?.properties?.station_id || ""}
+      onChange={handleChange}
+    >
       <option value="">Select a station</option>
 
       {stationsArr.map((feature) => {
