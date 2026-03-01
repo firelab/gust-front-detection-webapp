@@ -17,10 +17,11 @@ class NfgdaService:
         self.job_fields = job_fields
         self.out_dir = out_dir
 
-    def run(self) -> None:
+    async def run(self) -> None:
         """Execute the NFGDA algorithm and update job status in Redis.
 
-        This method is designed to be called from a worker thread.
+        Uses asyncio.create_subprocess_exec under the hood so that the
+        calling event loop is never blocked.
         """
         try:
             self.redis_client.hset(self.job_key, "status", "PROCESSING")
@@ -34,7 +35,7 @@ class NfgdaService:
                 self.job_fields["startUtc"],
                 self.job_fields["endUtc"],
             )
-            success = runner.run(self.out_dir)
+            success = await runner.run(self.out_dir)
 
             if success:
                 self.redis_client.hset(self.job_key, "status", "COMPLETED")
