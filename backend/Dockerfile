@@ -1,5 +1,5 @@
 # Full python app image: conform this to GDAL requirements, or run secondary venv for 3.11? Hmm
-FROM python:3.14.2 
+FROM python:3.14.2
 
 # Set the working directory inside the container
 WORKDIR /app
@@ -12,11 +12,10 @@ RUN pip install -r requirements.txt
 COPY . .
 
 #Makes sure that their code is ran properly
-RUN cd /app/APIs/NFGDArunner/NFGDA && pip install -e .
+RUN cd /app/src/nfgda_service/nfgda_algorithm && pip install -e .
 
 # Expose port 5000
 EXPOSE 5000
 
 # Command to run the Flask application
-CMD ["python", "app.py"]
-
+# CMD ["python", "app.py"]

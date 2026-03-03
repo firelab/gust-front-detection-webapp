@@ -1,0 +1,5 @@
+[tool.ruff]
+line-length = 88
+exclude = [
+    "backend/src/nfgda_service/nfgda_algorithm",
+]

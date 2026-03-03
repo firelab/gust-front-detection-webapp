@@ -1,7 +1,7 @@
 
 import uuid
 from datetime import datetime, timedelta, timezone
-from flask import jsonify, request
+from flask import jsonify
 
 def send_job_to_redis_queue(redis_client, request_fields: dict):
     """
