@@ -8,7 +8,7 @@ class JobStatus(Enum):
     """Lifecycle status of an NFGDA processing job."""
 
     PENDING = "PENDING"
-    RUNNING = "RUNNING"
+    PROCESSING = "PROCESSING"
     COMPLETE = "COMPLETE"
     FAILED = "FAILED"
 

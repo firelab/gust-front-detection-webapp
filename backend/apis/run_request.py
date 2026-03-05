@@ -39,12 +39,12 @@ def send_job_to_redis_queue(redis_client, request_fields: dict):
     )
 
     # add job to redis
-    redis_client.hset(job_id, mapping={
+    job_key = f"job:{job_id}"
+    redis_client.hset(job_key, mapping={
         "stationId": request_fields["stationId"],
         "startUtc": request_fields["startUtc"],
         "endUtc": request_fields["endUtc"],
-        "status": "PENDING",
-        "result_path": ""
+        "status": "PENDING"
     })
 
     # push job id to job queue
@@ -72,9 +72,9 @@ def validate_time_parameters(request_fields: dict):
     except ValueError:
         return jsonify({"error": "Invalid datetime format. Expected ISO 8601: YYYY-MM-DDTHH:MM:SSZ"}), 400
 
-    # startUtc must be within the last 10 minutes
-    if start_utc < now - timedelta(minutes=10):
-        return jsonify({"error": "startUtc must be within the last 10 minutes"}), 400
+    # startUtc must be within the last 2 hours
+    if start_utc < now - timedelta(minutes=120):
+        return jsonify({"error": "startUtc must be within the last 2 hours"}), 400
 
     # endUtc must be after startUtc
     if end_utc <= start_utc:
@@ -84,7 +84,7 @@ def validate_time_parameters(request_fields: dict):
     duration = end_utc - start_utc
     if duration < timedelta(seconds=30):
         return jsonify({"error": "Timebox duration must be at least 30 seconds"}), 400
-    if duration > timedelta(minutes=2):
-        return jsonify({"error": "Timebox duration must not exceed 2 minutes"}), 400
+    if duration > timedelta(minutes=120):
+        return jsonify({"error": "Timebox duration must not exceed 120 minutes"}), 400
 
     return None
