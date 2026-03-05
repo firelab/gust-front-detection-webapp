@@ -3,11 +3,15 @@ from concurrent.futures import ProcessPoolExecutor
 import sys
 import datetime
 import os
+import logging
 import numpy as np
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import nfgda.NF_Lib as NF_Lib
 from nfgda.NFGDA_load_config import *
 import traceback
 from functools import partial
+
+logger = logging.getLogger(__name__)
 
 async def counter_loop(interval=120):
     """
@@ -34,10 +38,12 @@ class HostDaemon:
             self.last_nexrad = datetime.datetime.now(datetime.timezone.utc)-datetime.timedelta(minutes=90)
             self.exit_time = datetime.datetime.now(datetime.timezone.utc)+datetime.timedelta(days=360)
             self.real_time_mode = True
+            logger.info("initializing in REAL-TIME mode, exit_time=%s", self.exit_time)
         else:
             self.last_nexrad = cstart-datetime.timedelta(minutes=1)
             self.exit_time = cend
             self.real_time_mode = False
+            logger.info("initializing in HISTORICAL mode, cstart=%s, cend=%s", cstart, cend)
 
         self.path_config = path_config
 
@@ -69,6 +75,7 @@ class HostDaemon:
         self._tasks = []
 
     async def check_update(self):
+        logger.info("checking for [%s] updates, latest nexrad=%s", radar_id, self.last_nexrad - datetime.timedelta(seconds=1))
         tprint(ht_tag+f"Checking for [{radar_id}] updates... latest nexrad =",self.last_nexrad - datetime.timedelta(seconds=1))
         try:
             if self.real_time_mode:
@@ -76,20 +83,26 @@ class HostDaemon:
             else:
                 scans = NF_Lib.aws_int.get_avail_scans_in_range(self.last_nexrad, self.last_nexrad+datetime.timedelta(minutes=20), radar_id)
         except TypeError:
+            logger.error("aws_int TypeError: failed to retrieve NEXRAD scans (possible radar outage, AWS latency, or invalid time window)")
             tprint(
                 ht_tag +
                 f"aws_int TypeError: failed to retrieve NEXRAD scans "
                 f"(possible radar outage, AWS latency, or invalid time window).{C.RESET}"
             )
             return
+        if len(scans) == 0:
+            logger.info("no new scans found")
+            return
         if len(scans)>0:
             self.last_nexrad = scans[-1].scan_time + datetime.timedelta(seconds=1)
+            logger.info("found %d new volume(s), advancing last_nexrad to %s", len(scans), self.last_nexrad)
             tprint(dl_tag+
                 f"Find {len(scans)} volumes.")
             self.new_nex = scans
 
             for vol in scans:
                 if vol.filename[-4:]=='_MDM':
+                    logger.info("skipping MDM volume: %s", vol.filename)
                     tprint(dl_tag+
                         f"MDM! Skip: {vol.filename}")
                     continue
@@ -98,14 +111,17 @@ class HostDaemon:
                 self.cur_nex_idx = (self.cur_nex_idx + 1) % self.live_nexrad.size
             tprint(ht_tag,self.last_nexrad, self.exit_time,self.last_nexrad > self.exit_time)
             if self.last_nexrad > self.exit_time:
+                logger.info("last_nexrad %s exceeded exit_time %s — stopping main loop", self.last_nexrad, self.exit_time)
                 self.running = False
                 # await self.delay_shutdown()
 
     async def download_worker(self):
+        logger.info("download_worker started")
         loop = asyncio.get_running_loop()
         try:
             while True:
                 vol,idx = await self.download_q.get()
+                logger.info("download_worker picked up vol=%s idx=%d (queue size=%d)", vol.filename, idx, self.download_q.qsize())
                 try:
                     async with self.dl_sem:
                         await loop.run_in_executor(
@@ -114,6 +130,7 @@ class HostDaemon:
                             self.path_config,
                             vol
                         )
+                    logger.info("download complete for idx=%d, setting nfgda_ready", idx)
                     self.nfgda_ready[idx].set()
                     tprint(dl_tag+
                         f'nfgda_ready [{idx}] set')
@@ -124,6 +141,7 @@ class HostDaemon:
                 except asyncio.CancelledError:
                     raise
                 except:
+                    logger.exception("download_worker fatal error for idx=%d", idx)
                     traceback.print_exc()
                     tprint(dl_tag+
                         f'{C.RED_B}Fatal Error.{C.RESET}')
@@ -133,10 +151,12 @@ class HostDaemon:
             raise
 
     async def nfgda_worker(self):
+        logger.info("nfgda_worker started")
         loop = asyncio.get_running_loop()
         try:
             while True:
                 idx = await self.nfgda_q.get()
+                logger.info("nfgda_worker picked up idx=%d (queue size=%d)", idx, self.nfgda_q.qsize())
                 pre_idx = (idx - 1) % self.live_nexrad.size
                 tprint(ng_tag+f'{self.live_nexrad[idx].strip()} [{idx}] wait nfgda_ready[{pre_idx}]')
                 await self.nfgda_ready[pre_idx].wait()
@@ -148,6 +168,7 @@ class HostDaemon:
                             self.live_nexrad[pre_idx],
                             self.live_nexrad[idx]
                         )
+                    logger.info("nfgda step complete for idx=%d, clearing nfgda_ready[%d], setting df_ready[%d]", idx, pre_idx, idx)
                     tprint(ng_tag+f'{self.live_nexrad[idx].strip()}[{idx}] nfgda_ready[{pre_idx}] clear; df_ready[{idx}] set')
                     self.nfgda_ready[pre_idx].clear()
                     self.df_ready[idx].set()
@@ -155,6 +176,7 @@ class HostDaemon:
                 except asyncio.CancelledError:
                     raise
                 except:
+                    logger.exception("nfgda_worker fatal error for idx=%d", idx)
                     traceback.print_exc()
                     tprint(ng_tag+f'{C.RED_B}Fatal Error.{C.RESET}')
                 finally:
@@ -163,10 +185,12 @@ class HostDaemon:
             raise
 
     async def d_forecast_worker(self):
+        logger.info("d_forecast_worker started")
         loop = asyncio.get_running_loop()
         try:
             while True:
                 idx = await self.d_forecast_q.get()
+                logger.info("d_forecast_worker picked up idx=%d (queue size=%d)", idx, self.d_forecast_q.qsize())
                 next_idx = (idx + 1) % self.live_nexrad.size
                 tprint(df_tag+f'{self.live_nexrad[idx].strip()}[{idx}] wait df_ready[{next_idx}]')
                 if (next_idx == self.cur_nex_idx) and not(self.real_time_mode):
@@ -195,6 +219,7 @@ class HostDaemon:
                 except asyncio.CancelledError:
                     raise
                 except:
+                    logger.exception("d_forecast_worker fatal error for idx=%d", idx)
                     traceback.print_exc()
                     tprint(df_tag+
                         f'{C.RED_B}Fatal Error.{C.RESET}')
@@ -204,10 +229,12 @@ class HostDaemon:
             raise
 
     async def s_forecast_worker(self):
+        logger.info("s_forecast_worker started")
         loop = asyncio.get_running_loop()
         try:
             while True:
                 idx = await self.s_forecast_q.get()
+                logger.info("s_forecast_worker picked up idx=%d (queue size=%d)", idx, self.s_forecast_q.qsize())
                 # next_idx = (idx + 1) % self.live_nexrad.size
                 # tprint(df_tag+f'{self.live_nexrad[idx].strip()}[{idx}] wait df_ready[{next_idx}]')
                 # await self.df_ready[next_idx].wait()
@@ -225,6 +252,7 @@ class HostDaemon:
                 except asyncio.CancelledError:
                     raise
                 except:
+                    logger.exception("s_forecast_worker fatal error for idx=%d", idx)
                     traceback.print_exc()
                     tprint(sf_tag+
                         f'{C.RED_B}Fatal Error.{C.RESET}')
@@ -234,6 +262,7 @@ class HostDaemon:
             raise
 
     async def run(self):
+        logger.info("starting HostDaemon.run() — spawning 4 worker tasks")
         self._tasks = [
             asyncio.create_task(self.download_worker(), name="download_worker"),
             asyncio.create_task(self.nfgda_worker(),   name="nfgda_worker"),
@@ -259,6 +288,7 @@ class HostDaemon:
 
     async def shutdown(self):
         self.running = False
+        logger.info("shutdown initiated — cancelling %d worker tasks", len(self._tasks))
         tprint(ht_tag+
             "Shutdown. Cancelling tasks.")
         for t in self._tasks:
@@ -266,13 +296,19 @@ class HostDaemon:
 
         # await asyncio.gather(*self._tasks, return_exceptions=True),
 
+        logger.info("shutting down process pools (wait=False)")
         self.dl_pool.shutdown(wait=False)
         self.ng_pool.shutdown(wait=False)
         self.df_pool.shutdown(wait=False)
         self.sf_pool.shutdown(wait=False)
+        logger.info("shutdown complete")
 
     async def delay_shutdown(self, timeout=3600):
         self.running = False
+        logger.info("delay_shutdown started (timeout=%ds), waiting for queues to drain", timeout)
+        logger.info("queue sizes — download=%d, nfgda=%d, d_forecast=%d, s_forecast=%d",
+                     self.download_q.qsize(), self.nfgda_q.qsize(),
+                     self.d_forecast_q.qsize(), self.s_forecast_q.qsize())
         tprint(ht_tag+
             "Delay Shutdown. Wait for Queues drained")
         try:
@@ -285,12 +321,17 @@ class HostDaemon:
                 ),
                 timeout,
             )
+            logger.info("all queues drained successfully")
             tprint(ht_tag+
                 "Queues drained:\n"
                 f"Queues : download={self.download_q.qsize()}; nfgda={self.nfgda_q.qsize()}; "
                 f"d forecast={self.d_forecast_q.qsize()}; "
                 f"s forecast={self.s_forecast_q.qsize()}")
         except asyncio.TimeoutError:
+            logger.warning("delay_shutdown timed out after %ds — queues not fully drained: "
+                           "download=%d, nfgda=%d, d_forecast=%d, s_forecast=%d",
+                           timeout, self.download_q.qsize(), self.nfgda_q.qsize(),
+                           self.d_forecast_q.qsize(), self.s_forecast_q.qsize())
             tprint(ht_tag+
                 "Shutdown timed out:\n"
                 f"Queues not drained: download={self.download_q.qsize()}; nfgda={self.nfgda_q.qsize()}; "
@@ -309,5 +350,12 @@ class HostDaemon:
             await asyncio.wait_for(_wait(), timeout)
 
 if __name__ == "__main__":
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
+        datefmt="%H:%M:%S",
+    )
+    logger.info("NFGDA_Host starting, custom_start_time=%s, custom_end_time=%s", custom_start_time, custom_end_time)
     daemon_host = HostDaemon(custom_start_time,custom_end_time)
     asyncio.run(daemon_host.run())
+    logger.info("NFGDA_Host exited")

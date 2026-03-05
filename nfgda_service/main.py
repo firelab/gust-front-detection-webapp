@@ -2,7 +2,7 @@ import os
 import asyncio
 import redis
 import logging
-from src.nfgda_service.nfgda_service import NfgdaService
+from nfgda_service import NfgdaService
 
 logging.basicConfig(
     level=logging.INFO,
@@ -10,15 +10,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-MAX_CONCURRENT_JOBS = 4
+MAX_CONCURRENT_JOBS = int(os.getenv("MAX_CONCURRENT_JOBS", "1"))
 
-redis_client = redis.Redis(host='redis', port=6379, db=0, decode_responses=True)
+redis_client = redis.Redis(host=os.getenv("REDIS_HOST"), port=int(os.getenv("REDIS_PORT", "6379")), db=int(os.getenv("REDIS_DB", "0")), decode_responses=True)
 
-# Semaphore limits how many NFGDA subprocesses run at once.
-# Unlike ProcessPoolExecutor, no extra "worker" Python processes are created;
-# each job launches exactly one child subprocess from this single event loop.
 job_semaphore = asyncio.Semaphore(MAX_CONCURRENT_JOBS)
-
 
 async def process_job(job_id: str) -> None:
     """Process a single job, acquiring the concurrency semaphore first."""
@@ -26,11 +22,15 @@ async def process_job(job_id: str) -> None:
         job_key = f"job:{job_id}"
         job_fields = redis_client.hgetall(job_key)
         out_dir = format_output_directory(job_id)
+        upate_redis_with_output_dir(job_id, out_dir)
 
         logger.info("processing job %s", job_id)
         service = NfgdaService(redis_client, job_id, job_fields, out_dir)
         await service.run()
 
+def upate_redis_with_output_dir(job_id: str, out_dir: str) -> None:
+    """Update Redis with the output directory for a job."""
+    redis_client.hset(f"job:{job_id}", "outputDir", out_dir)
 
 def format_output_directory(job_id: str) -> str:
     """Format the output directory for a job."""
@@ -64,7 +64,6 @@ async def listen_for_jobs() -> None:
 
 def main():
     asyncio.run(listen_for_jobs())
-
 
 if __name__ == "__main__":
     main()

@@ -1,7 +1,6 @@
 import os
 import logging
-
-from src.nfgda_service.nfgda_runner import NfgdaRunner
+from nfgda_runner import NfgdaRunner
 
 logger = logging.getLogger(__name__)
 
@@ -18,11 +17,7 @@ class NfgdaService:
         self.out_dir = out_dir
 
     async def run(self) -> None:
-        """Execute the NFGDA algorithm and update job status in Redis.
-
-        Uses asyncio.create_subprocess_exec under the hood so that the
-        calling event loop is never blocked.
-        """
+        """Execute the NFGDA algorithm and update job status in Redis."""
         try:
             self.redis_client.hset(self.job_key, "status", "PROCESSING")
 
@@ -34,8 +29,10 @@ class NfgdaService:
                 self.job_fields["stationId"],
                 self.job_fields["startUtc"],
                 self.job_fields["endUtc"],
+                self.job_id,
+                self.out_dir
             )
-            success = await runner.run(self.out_dir)
+            success = await runner.run()
 
             if success:
                 self.redis_client.hset(self.job_key, "status", "COMPLETED")
