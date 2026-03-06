@@ -23,6 +23,18 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
+  
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
 
 volumes:
   redis_data:

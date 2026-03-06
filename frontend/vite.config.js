@@ -9,6 +9,6 @@ export default defineConfig({
     tailwindcss()
   ],
   server:{ proxy:{
-    "/APIs": "http://localhost:5000"
+    "/APIs": "http://backend:5000" //backend to work with docker, localhost w/o
   }}
 })
