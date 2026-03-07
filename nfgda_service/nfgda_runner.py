@@ -30,7 +30,7 @@ class NfgdaRunner:
         self.job_id = job_id
         self.out_dir = out_dir
 
-    async def run(self) -> bool:
+    async def run(self):
         """
         Run the NFGDA process, writing output to specified out_dir.
         Stdout and stderr are streamed line-by-line in real time so logs appear immediately in
@@ -47,7 +47,7 @@ class NfgdaRunner:
         logger.info("setting environment variable NFGDA_CONFIG_PATH to %s", config_path)
         
         if config_path is None:
-            return False
+            return False, "Failed to create config file"
 
         logger.info("running algorithm for job %s", self.job_id)
         state = {"no_data_count": 0}
@@ -78,7 +78,7 @@ class NfgdaRunner:
                 logger.error("NFGDA algorithm timed out — killing process")
                 proc.kill()
                 await proc.wait()
-                return False
+                return False, "NFGDA algorithm timed out"
             finally:
                 # flush remaining buffered output
                 await asyncio.gather(*stream_tasks)
@@ -89,7 +89,7 @@ class NfgdaRunner:
                     "NFGDA process killed due to data gap — no scans found after %d consecutive polls",
                     MAX_NO_DATA_POLLS,
                 )
-                return False
+                return False, f"No radar data found after {MAX_NO_DATA_POLLS} polls"
 
             # Check if the algorithm exited with a non-zero return code
             if proc.returncode != 0:
@@ -97,11 +97,11 @@ class NfgdaRunner:
                     "NFGDA algorithm exited with code %d",
                     proc.returncode,
                 )
-                return False
+                return False, f"An error occurred processing the algorithm. Error code: {proc.returncode}"
 
             # woo algorithm dun did its jerb
             logger.info("algorithm processing completed for job %s", self.job_id)
-            return True
+            return True, None
 
         finally:
             if config_path and os.path.exists(config_path):

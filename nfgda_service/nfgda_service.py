@@ -32,14 +32,16 @@ class NfgdaService:
                 self.job_id,
                 self.out_dir
             )
-            success = await runner.run()
+            success, message = await runner.run()
 
             if success:
                 self.redis_client.hset(self.job_key, "status", "COMPLETED")
                 logger.info("Job %s completed successfully", self.job_id)
             else:
                 self.redis_client.hset(self.job_key, "status", "FAILED")
+                self.redis_client.hset(self.job_key, "error_message", message)
                 logger.warning("Job %s failed (runner returned falsy)", self.job_id)
+                logger.warning("Error message: %s", message)
 
         except Exception as e:
             self.redis_client.hset(self.job_key, "status", "FAILED")

@@ -7,12 +7,12 @@ def get_job_status(redis_client, job_id: str):
     Response shape:
         { "job_id": "<id>", "stationId": "...", "status": "...", ... }
         OR
-        { "error": "Job not found", "status": 400 }
+        { "error": "Job not found", "status": 404 }
     """
     job_key = f"job:{job_id}"
     job_fields = redis_client.hgetall(job_key)
     if not job_fields:
-        return jsonify({"error": "Job not found", "status": 400})
+        return jsonify({"error": "Job not found"}), 404
 
     # Check the job's position in the queue
     queue = redis_client.lrange("job_queue", 0, -1)
@@ -21,4 +21,4 @@ def get_job_status(redis_client, job_id: str):
     except ValueError:
         queue_position = None  # not in queue (already processing or done)
 
-    return jsonify({"job_id": job_id, "queue_position": queue_position, **job_fields})
+    return jsonify({"job_id": job_id, "queue_position": queue_position, **job_fields}), 200

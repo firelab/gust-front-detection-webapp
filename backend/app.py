@@ -30,7 +30,7 @@ def stations_endpoint():
 def start_run():
     """Takes station and time frame args, kicks off an NFGDA processing job, and returns the new job ID and status code."""
     if not request.json:
-        return jsonify({"error": "Missing request body", "status": 400})
+        return jsonify({"error": "Missing request body"}), 400
     
     return send_job_to_redis_queue(redis_client, dict(request.json))
     
@@ -48,7 +48,7 @@ def status_endpoint():
     """Takes job ID, returns status."""
     job_id = request.args.get("job_id")
     if not job_id:
-        return jsonify({"error": "Missing job ID", "status": 400})
+        return jsonify({"error": "Missing job ID"}), 400
     return get_job_status(redis_client, job_id)
 
 
