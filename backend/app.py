@@ -1,4 +1,3 @@
-import uuid
 import redis
 from flask import Flask, jsonify, request
 from apis.stations import list_stations_api

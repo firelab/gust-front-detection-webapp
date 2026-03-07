@@ -1,5 +1,5 @@
 # Full python app image: conform this to GDAL requirements, or run secondary venv for 3.11? Hmm
-FROM python:3.14.2 
+FROM python:3.14.2
 
 # Set the working directory inside the container
 WORKDIR /app
@@ -15,5 +15,4 @@ COPY . .
 EXPOSE 8001
 
 # Command to run the Flask application
-CMD ["python", "app.py"]
-
+# CMD ["python", "app.py"]
