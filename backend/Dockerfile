@@ -11,7 +11,7 @@ RUN pip install -r requirements.txt
 # Copy the rest of the application code
 COPY . .
 
-# Expose port 5000
+# Expose port 8001
 EXPOSE 8001
 
 # Command to run the Flask application

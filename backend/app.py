@@ -3,6 +3,7 @@ import redis
 from flask import Flask, jsonify, request
 from apis.stations import list_stations_api
 from apis.run_request import send_job_to_redis_queue
+from apis.status import get_job_status
 
 app = Flask(__name__)
 
@@ -29,7 +30,7 @@ def stations_endpoint():
 def start_run():
     """Takes station and time frame args, kicks off an NFGDA processing job, and returns the new job ID and status code."""
     if not request.json:
-        return jsonify({"error": "Missing request body"}), 400
+        return jsonify({"error": "Missing request body", "status": 400})
     
     return send_job_to_redis_queue(redis_client, dict(request.json))
     
@@ -42,10 +43,13 @@ def get_frames(job_id: str):
 
 
 # Job Status API
-@app.route("/APIs/status/<job_id>", methods=["GET"])
-def get_status(job_id: str):
+@app.route("/APIs/status", methods=["GET"])
+def status_endpoint():
     """Takes job ID, returns status."""
-    pass
+    job_id = request.args.get("job_id")
+    if not job_id:
+        return jsonify({"error": "Missing job ID", "status": 400})
+    return get_job_status(redis_client, job_id)
 
 
 if __name__ == '__main__':

@@ -1,18 +1,21 @@
-"""
-Algorithm / Job Status API – returns the current status of a processing job.
-"""
 
 from flask import jsonify
-from src.nfgda_service.nfgda_service import NfgdaService
 
-
-def get_status(job_id: str, nfgda_service: NfgdaService):
+# Add redis client to the arguments so that it can see the container
+def get_status(job_id: str, redis_client):
     """
     Response shape:
     {
         "id": "<jobId>",
-        "status": "PENDING" | "RUNNING" | "COMPLETE" | "FAILED",
-        "error": ""
+        "status": "PENDING" | "PROCESSING" | "COMPLETE" | "FAILED"
     }
     """
-    pass
+
+    job = redis_client.hgetall(job_id)  # reads the hash from Redis
+
+    if not job:
+        # job doesn't exist
+        return jsonify({"error": "Job not found", "status": 400})
+
+    # job exists
+    return jsonify({"id": job_id, "jobStatus": job.get("status", ""), "status": 200})
