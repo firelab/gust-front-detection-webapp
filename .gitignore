@@ -26,6 +26,7 @@ dist-ssr
 
 # Will's Backend notes
 gust-front-detection-backend/notes.txt
+gust-front-detection-webapp/backend/apis/wills_notes.txt
 
 # Python Files
 */.venv/
@@ -36,3 +37,4 @@ gust-front-detection-backend/notes.txt
 
 # Output
 **/job_results/
+
