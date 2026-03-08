@@ -10,8 +10,9 @@ VM=cl.VarMap()
 varname_table=VM.varname_table
 varunit_table=VM.varunit_table
 
+config_path = os.environ.get("NFGDA_CONFIG_PATH", "NFGDA.ini")
 config = configparser.ConfigParser()
-config.read("NFGDA.ini")
+config.read(config_path)
 export_preds_dir = config["Settings"]["export_preds_dir"]
 evalbox_on = config.getboolean('Settings', 'evalbox_on')
 export_forecast_dir = config["Settings"]["export_forecast_dir"]

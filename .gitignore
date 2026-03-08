@@ -32,3 +32,7 @@ gust-front-detection-backend/notes.txt
 */.env/
 **/__pycache__/
 *.py[cod]
+*/venv/
+
+# Output
+**/job_results/

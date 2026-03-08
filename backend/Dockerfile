@@ -11,11 +11,8 @@ RUN pip install -r requirements.txt
 # Copy the rest of the application code
 COPY . .
 
-#Makes sure that their code is ran properly
-RUN cd /app/src/nfgda_service/nfgda_algorithm && pip install -e .
-
-# Expose port 5000
-EXPOSE 5000
+# Expose port 8001
+EXPOSE 8001
 
 # Command to run the Flask application
 # CMD ["python", "app.py"]
