@@ -14,12 +14,19 @@ services:
       - redis
       - backend
     volumes:
-      - ./job_results:/job_results
-    environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_DB=0
-      - MAX_CONCURRENT_JOBS=2
+      - redis_data:/data
+  
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
 
   backend:
     build:
