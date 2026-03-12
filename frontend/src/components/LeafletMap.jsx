@@ -19,12 +19,6 @@ function DisplayPosition({ map, mapLatLng, setMapLatLng }) {
       map.off('move', onMove)
     }
   }, [map, onMove])
-
-  return (
-    <p>
-      latitude: {mapLatLng.lat.toFixed(4)}, longitude: {mapLatLng.lng.toFixed(4)}{' '}
-    </p>
-  )
 }
 
 
@@ -58,28 +52,47 @@ export default function LeafletMap({
         center={mapLatLng}
         zoom={4}
         scrollWheelZoom={false}
-        style={{ height: '400px', width: '100%' }}
+        style={{ height: '600px', width: '100%' }}
         ref={setMap}
       >
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        {stations.map((station) =>( //loops through array
-        <Marker
-          key = {station.properties.station_id}
-          position ={[station.geometry.coordinates[1],
-                      station.geometry.coordinates[0],]}
-        >
-          <Popup autoPan={false} > {/*lets user choose station with drop down after clicking on marker */}
-            {station.properties.name} <br />
-            ({station.properties.station_id}) <br />
-            <button type="button" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-1 rounded" onClick={()=> setSelectedStation(station)}>
-              Select </button> {/*updates selected stations*/}
+      {stations.map((station) => {
+        const id = station?.properties?.station_id
+        const name = station?.properties?.name
+        const coords = station?.geometry?.coordinates
 
-          </Popup>
-        </Marker>
-        ))}
+        if (!id || !coords || coords.length < 2) return null
+
+        const [lng, lat] = coords
+
+        const isSelected =
+          selectedStation?.properties?.station_id === id
+
+        return (
+          <Marker
+            key={id}
+            position={[lat, lng]}
+          >
+            <Popup autoPan={false}>
+              <span className="font-bold">{name}</span> ({id}) <br />
+
+              <button
+                type="button"
+                className={`w-full font-bold py-1 mt-1 rounded ${
+                  isSelected
+                    ? "bg-white outline-2 outline-gray-200"
+                    : "bg-[#1976d2] hover:bg-[#1565c0] text-white cursor-pointer"}`}
+                onClick={() => setSelectedStation(station)}
+              >
+                {isSelected ? "Selected" : "Select"}
+              </button>
+            </Popup>
+          </Marker>
+        )
+      })}
         
         <GeotiffLayer />
       </MapContainer>
