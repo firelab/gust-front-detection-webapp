@@ -1,3 +1,8 @@
+import FormControl from "@mui/material/FormControl";
+import InputLabel from "@mui/material/InputLabel";
+import Select from "@mui/material/Select";
+import MenuItem from "@mui/material/MenuItem";
+
 export default function RadarStationDropdown({
   stations = [],
   selectedStation,
@@ -15,26 +20,32 @@ export default function RadarStationDropdown({
     setSelectedStation(stationObj || null)
   }
 
+  const stationID = selectedStation?.properties?.station_id || "";
+
   return (
-    <select
-      value={selectedStation?.properties?.station_id || ""}
-      onChange={handleChange}
-    >
-      <option value="">Select a station</option>
+    <FormControl fullWidth size="medium">
+      <InputLabel id="radar-station-label">Select a station</InputLabel>
+      <Select
+        labelId="radar-station-label"
+        value={stationID}
+        label="Select a station"
+        onChange={handleChange}
+      >
+        
+        {stationsArr.map((feature) => {
+          const props = feature?.properties;
+          const stationId = props?.station_id ?? "";
+          const name = props?.name ?? "";
 
-      {stationsArr.map((feature) => {
-        const props = feature?.properties;
-        const stationId = props?.station_id ?? "";
-        const name = props?.name ?? "";
+          if (!stationId) return null;
 
-        if (!stationId) return null;
-
-        return (
-          <option key={stationId} value={stationId}>
-            {name} ({stationId})
-          </option>
-        );
-      })}
-    </select>
+          return (
+            <MenuItem key={stationId} value={stationId}>
+              {name} ({stationId})
+            </MenuItem>
+          );
+        })}
+      </Select>
+    </FormControl>
   );
 }
