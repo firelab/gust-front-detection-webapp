@@ -1,26 +1,18 @@
-version: "3.8"
-
 services:
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    ports:
-      - "5000:5000"
-    volumes:
-      - ./backend:/app
-    environment:
-      - FLASK_ENV=development
-      - PYTHONUNBUFFERED=1
-      - REDIS_URL=redis://redis:6379
-    depends_on:
-      - redis
-    command: python app.py
-
   redis:
-    image: redis:latest
+    image: redis:7-alpine
     ports:
       - "6379:6379"
+
+  nfgda-service:
+    build:
+      context: ./nfgda_service
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    depends_on:
+      - redis
+      - backend
     volumes:
       - redis_data:/data
   
@@ -36,5 +28,15 @@ services:
     depends_on:
       - backend
 
-volumes:
-  redis_data:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8001"
+    depends_on:
+      - redis
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0

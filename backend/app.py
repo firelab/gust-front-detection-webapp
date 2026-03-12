@@ -2,6 +2,7 @@ import redis
 from flask import Flask, jsonify, request
 from apis.stations import list_stations_api
 from apis.run_request import send_job_to_redis_queue
+from apis.status import get_job_status
 
 app = Flask(__name__)
 
@@ -41,12 +42,15 @@ def get_frames(job_id: str):
 
 
 # Job Status API
-@app.route("/APIs/status/<job_id>", methods=["GET"])
-def get_status(job_id: str):
+@app.route("/APIs/status", methods=["GET"])
+def status_endpoint():
     """Takes job ID, returns status."""
-    pass
+    job_id = request.args.get("job_id")
+    if not job_id:
+        return jsonify({"error": "Missing job ID"}), 400
+    return get_job_status(redis_client, job_id)
 
 
 if __name__ == '__main__':
     # Listen on all available network interfaces (0.0.0.0)
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=8001)
