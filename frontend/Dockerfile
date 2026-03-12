@@ -11,4 +11,4 @@ COPY . .
 #Expose port 5173
 EXPOSE 5173
 #command to run webpage
-#CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
