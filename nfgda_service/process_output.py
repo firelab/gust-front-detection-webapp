@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 def generate_geotiff_output(job_id: str, redis_client: redis.Redis):
 
     # get station id from redis
-    station_id = redis_client.hget(f"job:{job_id}", "station_id")
+    station_id = redis_client.hget(f"job:{job_id}", "stationId")
     if station_id is None:
         return f"Could not find station ID for job {job_id} in Redis."
     
@@ -47,10 +47,12 @@ def generate_geotiff_output(job_id: str, redis_client: redis.Redis):
     
 
 def get_radar_coords(station_id: str, redis_client: redis.Redis) -> tuple[float, float]:
-    coords_json = redis_client.hget("stations", f"{station_id}_coords")
+    station_json = redis_client.hget("stations", station_id)
     
-    if coords_json:
-        lon, lat = json.loads(coords_json)
+    if station_json:
+        station_data = json.loads(station_json)
+        lon = station_data["properties"]["lon"]
+        lat = station_data["properties"]["lat"]
         return (float(lon), float(lat))
     else:
         return None
