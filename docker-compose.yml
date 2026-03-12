@@ -13,9 +13,11 @@ services:
     depends_on:
       - redis
       - backend
-    volumes:
-      - redis_data:/data
-  
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      
   frontend:
     build:
       context: ./frontend
