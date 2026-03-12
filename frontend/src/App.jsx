@@ -21,7 +21,41 @@ export default function App() {
   const [selectedDateTime, setSelectedDateTime] = useState(dayjs().tz(dayjs.tz.guess()).startOf('hour'));
   const [timezone, setTimezone] = useState(dayjs.tz.guess());
   
-  // fetch radar stations from backend API
+  // --------------------------------------- HANDLERS ----------------------------------------
+
+  // requests a job from /backend/apis/run_request.py and recieves a job_id and response code
+  const fetchRadarData = async () => {
+    try {
+      if (!selectedStation?.properties?.station_id) {
+        throw new Error("No station selected");
+      }
+      const requestBody = {
+          stationId: selectedStation.properties.station_id
+      };
+      if (!currentMode){
+        // if not fetching current data the end time requested is t+10 minutes
+        requestBody.startUtc = selectedDateTime.utc().format("YYYY-MM-DDTHH:mm:ss[Z]")
+        requestBody.endUtc = selectedDateTime.add(10, 'minute').utc().format("YYYY-MM-DDTHH:mm:ss[Z]")
+      }
+      const response = await fetch("/APIs/run", {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        },
+        body: JSON.stringify(requestBody)
+      });
+      if (!response.ok) {
+        throw new Error(`Request failed with status ${response.status}`);
+      }
+      const data = await response.json();
+      console.log(data)
+    } catch (err) {
+      console.error(err)
+    }
+  };
+
+  // fetch radar stations from backend at /APIs/stations
   useEffect(() => {
     async function loadStations() {
       const response = await fetch("/APIs/stations");
@@ -37,6 +71,7 @@ export default function App() {
     loadStations();
   }, []);
 
+  // timezone change handler
   function handleTimezoneChange(event) {
     const newTZ = event.target.value
 
@@ -46,6 +81,8 @@ export default function App() {
       setSelectedDateTime(selectedDateTime.tz(newTZ))
     }
   }
+
+  // ---------------------------------------- JSX ----------------------------------------
 
   return (
     <Container maxWidth="md">
@@ -100,7 +137,7 @@ export default function App() {
           {/* Fetch Button */}
           <Button
             className="w-[20%] h-14" 
-            onClick={()=>{console.log(selectedStation.properties.station_id + selectedDateTime.utc().format())}}
+            onClick={fetchRadarData}
             variant="contained">
               Get Radar Data
           </Button>
