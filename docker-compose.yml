@@ -17,6 +17,8 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_DB=0
+    volumes:
+      - ./job_results:/job_results
       
   frontend:
     build:
@@ -42,3 +44,5 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_DB=0
+    volumes:
+      - ./job_results:/job_results
