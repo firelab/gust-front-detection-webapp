@@ -42,7 +42,7 @@ def upate_redis_with_output_dir(job_id: str, out_dir: str) -> None:
 
 def format_output_directory(job_id: str) -> str:
     """Format the output directory for a job."""
-    out_dir = f"/job_results/{job_id}/"
+    out_dir = f"/nfgda_output/{job_id}/"
     os.makedirs(out_dir, exist_ok=True)
     return out_dir
 

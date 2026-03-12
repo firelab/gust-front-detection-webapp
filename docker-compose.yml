@@ -18,8 +18,9 @@ services:
       - REDIS_PORT=6379
       - REDIS_DB=0
     volumes:
-      - ./job_results:/job_results
-      
+      - ./nfgda_output:/nfgda_output
+      - ./processed_data:/processed_data
+
   frontend:
     build:
       context: ./frontend
@@ -45,4 +46,5 @@ services:
       - REDIS_PORT=6379
       - REDIS_DB=0
     volumes:
-      - ./job_results:/job_results
+      - ./nfgda_output:/nfgda_output
+      - ./processed_data:/processed_data

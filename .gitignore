@@ -36,5 +36,5 @@ gust-front-detection-webapp/backend/apis/wills_notes.txt
 */venv/
 
 # Output
-**/job_results/
-
+**/nfgda_output/
+**/processed_data/
