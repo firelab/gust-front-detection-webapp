@@ -35,8 +35,7 @@ class NfgdaService:
             success, message = await runner.run()
 
             if success:
-                self.redis_client.hset(self.job_key, "status", "COMPLETED")
-                logger.info("Job %s completed successfully", self.job_id)
+                logger.info("Algorithm processing for job %s completed successfully", self.job_id)
             else:
                 self.redis_client.hset(self.job_key, "status", "FAILED")
                 self.redis_client.hset(self.job_key, "error_message", message)

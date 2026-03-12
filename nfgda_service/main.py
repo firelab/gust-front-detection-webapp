@@ -3,6 +3,7 @@ import asyncio
 import redis
 import logging
 from nfgda_service import NfgdaService
+from process_output import generate_geotiff_output
 
 logging.basicConfig(
     level=logging.INFO,
@@ -32,6 +33,20 @@ async def run_and_release_job(job_id: str) -> None:
     """Run a job and release the semaphore when finished."""
     try:
         await process_job(job_id)
+
+        if redis_client.hget(f"job:{job_id}", "status") == "FAILED":
+            return
+
+        logger.info("Generating GeoTIFF series for job %s", job_id)
+        result = generate_geotiff_output(job_id, redis_client)
+        
+        if result is not None:
+            logger.error("Failed to generate GeoTIFF series for job %s. Error message: %s", job_id, result)
+            redis_client.hset(f"job:{job_id}", "status", "FAILED", "error_message", result)
+        else:
+            logger.info("Successfully generated GeoTIFF series for job %s", job_id)
+            redis_client.hset(f"job:{job_id}", "status", "COMPLETED")
+
     finally:
         # they took my jerb!
         job_semaphore.release()

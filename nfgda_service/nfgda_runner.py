@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
-MAX_NO_DATA_POLLS = 10
+MAX_NO_DATA_POLLS = int(os.getenv("MAX_NO_DATA_POLLS", "10"))
 
 class NfgdaRunner:
     """Executes the NFGDA algorithm for a given run request."""
@@ -42,7 +42,9 @@ class NfgdaRunner:
         Returns:
             bool: True if the NFGDA process completed successfully, False otherwise.
         """
-
+        
+        logger.info(f"timebox parameters set to start_utc: {self.start_utc}, end_utc: {self.end_utc}")
+        
         config_path = self.create_temp_config(self.out_dir)
         logger.info("setting environment variable NFGDA_CONFIG_PATH to %s", config_path)
         
