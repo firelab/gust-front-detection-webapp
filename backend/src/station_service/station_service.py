@@ -7,6 +7,8 @@ from typing import List
 from geojson import FeatureCollection, Point, Feature
 from urllib.request import urlopen
 import certifi
+import redis
+import json
 
 # KML namespace used in the XML tags
 KML_NAMESPACE = "{http://www.opengis.net/kml/2.2}"
@@ -17,8 +19,9 @@ STATION_ID_REGEX = re.compile(r"\(([^)]+)\)")
 class StationService:
     """Service responsible for retrieving available weather stations."""
 
-    def __init__(self) -> None:
+    def __init__(self, redis_client: redis.Redis) -> None:
         self.station_retrieval_path = "https://www.ncei.noaa.gov/access/homr/file/nexrad-stations.kmz"
+        self.redis_client = redis_client
 
     def retrieve_station_list(self) -> FeatureCollection:
         """Fetch a list of weather stations.
@@ -34,6 +37,21 @@ class StationService:
         
         kml_content = self.download_and_extract_kml()
         return self.parse_stations_from_kml(kml_content)
+
+    def get_station(self, station_id: str) -> Feature:
+        """Retrieve a specific station by its 4-letter ID. Check Redis first, then re-populate if missing."""
+        station_data = self.redis_client.hget("stations", station_id)
+        if station_data:
+            return Feature(**json.loads(station_data))
+            
+        # Re-run the KML download -> load into redis process
+        self.retrieve_station_list()
+        
+        station_data = self.redis_client.hget("stations", station_id)
+        if station_data:
+            return Feature(**json.loads(station_data))
+        else:
+            raise ValueError(f"Station {station_id} not found in KML file")
 
     def download_and_extract_kml(self) -> bytes:
         """Fetch the KMZ archive from the configured URL and return raw KML bytes."""
@@ -51,13 +69,13 @@ class StationService:
             if not kml_filenames:
                 raise ValueError("KMZ archive does not contain a .kml file")
             kml_content = file.read(kml_filenames[0])
-            file.close()
             return kml_content
 
     def parse_stations_from_kml(self, kml_content: bytes) -> FeatureCollection:
         """Parse KML/XML and return a GeoJSON FeatureCollection of stations."""
         root = ET.fromstring(kml_content)
         stations: List[Feature] = []
+        redis_mapping = {}
 
         # Iterate through all Placemark elements in the KML
         for placemark in root.iter(f"{KML_NAMESPACE}Placemark"):
@@ -90,22 +108,31 @@ class StationService:
                     # Altitude is optional
                     altitude = float(parts[2]) if len(parts) > 2 else None
                     point = Point((lon, lat))
-                    stations.append(
-                        Feature(
-                            geometry=point,
-                            properties={
-                                "station_id": station_id,
-                                "name": station_name,
-                                "altitude": altitude,
-                            }
-                        )
+                    
+                    feat = Feature(
+                        geometry=point,
+                        properties={
+                            "station_id": station_id,
+                            "name": station_name,
+                            "altitude": altitude,
+                            "lon": lon,
+                            "lat": lat
+                        }
                     )
+                    
+                    stations.append(feat)
+                    redis_mapping[station_id] = json.dumps(dict(feat))
+
+                    
                 except (ValueError, IndexError):
                     # Skip if coordinates are malformed
                     continue
         
         if not stations:
             raise ValueError("No stations found in KML file")
-        stations = FeatureCollection(stations)
-
-        return stations
+            
+        # load to redis
+        if redis_mapping:
+            self.redis_client.hset("stations", mapping=redis_mapping)
+            
+        return FeatureCollection(stations)

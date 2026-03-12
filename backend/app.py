@@ -22,7 +22,7 @@ def stations_endpoint():
         
         JSON error message with a 404 status code.
     """
-    return list_stations_api()
+    return list_stations_api(redis_client)
 
 
 # Algorithm Runner API
