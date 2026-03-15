@@ -130,10 +130,9 @@ def _reflectivity_to_rgba(refl: np.ndarray, nfout: np.ndarray) -> np.ndarray:
 
     rgba[valid] = mapped
 
-    # Overlay gust-front detections (dilated for visibility, matching nfgda_fig)
+    # Overlay gust-front detections (dilated slightly for visibility)
     if nfout is not None and np.any(nfout):
-        gf_mask = binary_dilation(nfout, structure=disk(3))
-        # Only draw where we also have valid radar data
+        gf_mask = binary_dilation(nfout, structure=disk(2))
         gf_draw = gf_mask & valid
         rgba[gf_draw] = _GF_RGBA
 
@@ -258,7 +257,7 @@ def project_data(npz_path: str, radar_lat: float, radar_lon: float, out_dir: str
     driver.CreateCopy(
         final_tif,
         warped_ds,
-        options=["COMPRESS=LZW", "TILED=YES"]
+        options=["COMPRESS=DEFLATE", "TILED=YES"]
     )
 
     warped_ds = None
