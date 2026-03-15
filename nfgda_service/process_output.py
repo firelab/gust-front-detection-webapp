@@ -146,7 +146,7 @@ def project_data(npz_path: str, radar_lat: float, radar_lon: float, out_dir: str
     # Parameters
     # ---------------------------
     ae_tif = os.path.join(out_dir, f"radar_reflectivity_ae_{index}.tif")
-    final_tif = os.path.join(out_dir, f"radar_reflectivity_3857_{index}.tif")
+    final_tif = os.path.join(out_dir, f"frame_{index}.tif")
 
     pixel_size_m = 500.0   # 500 m spacing
     channel_index = 1      # channel 1 = reflectivity (0-based)
@@ -263,4 +263,7 @@ def project_data(npz_path: str, radar_lat: float, radar_lon: float, out_dir: str
 
     warped_ds = None
     logger.info(f"Wrote {final_tif}")
+
+    # prune ae tile
+    os.remove(ae_tif)
 
