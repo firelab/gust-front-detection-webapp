@@ -31,9 +31,7 @@ class StationService:
 
             For now we'll just fetch and process the KMZ every time on demand until getting a database 
             implementation working but
-            TODO: add a db table of weather stations and throw it in hyah!
-
-        """
+            """
         
         kml_content = self.download_and_extract_kml()
         return self.parse_stations_from_kml(kml_content)
@@ -96,6 +94,10 @@ class StationService:
             # If you have read this far, please audibly meow during the next group meeting :)
 
             station_id = id_match.group(1)
+            # filter for NEXRAD stations only
+            if not station_id.startswith("K"):
+                continue
+            
             # The portion before the parenthesized ID is the human-readable name
             station_name = raw_name[: id_match.start()].strip()
 
