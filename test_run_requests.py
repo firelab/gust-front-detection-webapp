@@ -91,10 +91,10 @@ def main():
     # ── Define 3 valid jobs: 10-minute windows within the last hour ──
     # ── Plus 1 invalid job with endUtc in the future ─────────────────
     jobs_config = [
-        ("Job 1", station_ids[0], now - timedelta(minutes=60), now - timedelta(minutes=50)),
-        ("Job 2", station_ids[1], now - timedelta(minutes=45), now - timedelta(minutes=35)),
-        ("Job 3", station_ids[2], now - timedelta(minutes=30), now - timedelta(minutes=20)),
-        ("Job 4", station_ids[0], now - timedelta(minutes=5),  now + timedelta(minutes=10)),  # future — expect 400
+        ("Job 1", station_ids[0], now - timedelta(minutes=90), now - timedelta(minutes=75)),
+        ("Job 2", station_ids[1], now - timedelta(minutes=75), now - timedelta(minutes=60)),
+        ("Job 3", station_ids[2], now - timedelta(minutes=60), now - timedelta(minutes=45)),
+        ("Job 4", station_ids[0], now - timedelta(minutes=10),  now + timedelta(minutes=25)),  # future — expect 400
     ]
 
     job_ids: list[str | None] = []

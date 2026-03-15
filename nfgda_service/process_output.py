@@ -4,13 +4,67 @@ into a stack of GeoTIFFs for final display on the frontend.
 Based on the projectRadarData.py script provided by Natalie. """
 
 import numpy as np
+import matplotlib.colors as mcolors
 from osgeo import gdal, osr
+from scipy.ndimage import binary_dilation
+from skimage.morphology import disk
 import os
 import redis
 import json
 import logging
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Radar NEXRAD Zhh colormap (cdict11 from colorlevel.py)
+# ---------------------------------------------------------------------------
+_cdict_nexrad_zhh = {
+    'red':  ((  0.0, 150/255, 150/255),
+             ( 2/19, 207/255, 207/255),
+             ( 6/19,  67/255,  67/255),
+             ( 7/19, 111/255, 111/255),
+             ( 8/19,  53/255,  17/255),
+             (11/19,   9/255,   9/255),
+             (12/19,     1.0,     1.0),
+             (14/19,     1.0,     1.0),
+             (16/19, 113/255,     1.0),
+             (17/19,     1.0,     1.0),
+             (18/19, 225/255, 178/255),
+             (  1.0,  99/255,  99/255)),
+
+    'green': ((  0.0, 145/255, 145/255),
+              ( 2/19, 210/255, 210/255),
+              ( 6/19,  94/255,  94/255),
+              ( 7/19, 214/255, 214/255),
+              ( 8/19, 214/255, 214/255),
+              (11/19,  94/255,  94/255),
+              (12/19, 226/255, 226/255),
+              (14/19, 128/255,     0.0),
+              (16/19,     0.0,     1.0),
+              (17/19, 146/255, 117/255),
+              (18/19,     0.0,     0.0),
+              (  1.0,     0.0,     0.0)),
+
+    'blue':  ((  0.0,  83/255,  83/255),
+              ( 2/19, 180/255, 180/255),
+              ( 4/19, 180/255, 180/255),
+              ( 6/19, 159/255, 159/255),
+              ( 7/19, 232/255, 232/255),
+              ( 8/19,  91/255,  24/255),
+              (12/19,     0.0,     0.0),
+              (16/19,     0.0,     1.0),
+              (17/19,     1.0,     1.0),
+              (18/19, 227/255,     1.0),
+              (  1.0, 214/255, 214/255))
+}
+
+_nexrad_cmap = mcolors.LinearSegmentedColormap('radar_NEXRAD_Zhh', _cdict_nexrad_zhh)
+_nexrad_boundaries = np.arange(-20, 75.1, 1)   # 96 bins, matching colorlevel.py
+_nexrad_norm = mcolors.BoundaryNorm(boundaries=_nexrad_boundaries, ncolors=_nexrad_cmap.N)
+
+# Gust-front overlay color (red, fully opaque)
+_GF_RGBA = np.array([255, 0, 0, 255], dtype=np.uint8)
+
 
 def generate_geotiff_output(job_id: str, redis_client: redis.Redis):
 
@@ -29,14 +83,14 @@ def generate_geotiff_output(job_id: str, redis_client: redis.Redis):
     if len(files) == 0:
         return "No files found in output directory"
 
-    # create output directory
-    out_dir = f"/processed_data/{job_id}/"
-    os.makedirs(out_dir, exist_ok=True)
-
     # get radar coordinates from redis
     radar_coords = get_radar_coords(station_id, redis_client)
     if radar_coords is None:
         return f"Could not find coordinates for station {station_id} in Redis."
+
+    # create output directory
+    out_dir = f"/processed_data/{job_id}/"
+    os.makedirs(out_dir, exist_ok=True)
     
     radar_lon, radar_lat = radar_coords
 
@@ -57,50 +111,99 @@ def get_radar_coords(station_id: str, redis_client: redis.Redis) -> tuple[float,
     else:
         return None
 
-def project_data(npz_path: str, radar_lat: float, radar_lon: float, out_dir: str, index:int) -> None:
+
+def _reflectivity_to_rgba(refl: np.ndarray, nfout: np.ndarray) -> np.ndarray:
+    """Convert a 2-D reflectivity array + boolean gust-front mask to RGBA uint8.
+
+    * Valid reflectivity pixels are colored with the NEXRAD Zhh colormap.
+    * NaN pixels become fully transparent (alpha = 0).
+    * Gust-front detections (`nfout == True`) are drawn as dark pixels.
+    """
+    ny, nx = refl.shape
+    rgba = np.zeros((ny, nx, 4), dtype=np.uint8)  # default: fully transparent
+
+    valid = ~np.isnan(refl)
+
+    # Map valid reflectivity through the colormap
+    normalized = _nexrad_norm(refl[valid])                 # int bin indices
+    mapped = (_nexrad_cmap(normalized) * 255).astype(np.uint8)  # (N, 4) RGBA
+
+    rgba[valid] = mapped
+
+    # Overlay gust-front detections (dilated for visibility, matching nfgda_fig)
+    if nfout is not None and np.any(nfout):
+        gf_mask = binary_dilation(nfout, structure=disk(3))
+        # Only draw where we also have valid radar data
+        gf_draw = gf_mask & valid
+        rgba[gf_draw] = _GF_RGBA
+
+    return rgba
+
+
+def project_data(npz_path: str, radar_lat: float, radar_lon: float, out_dir: str, index: int) -> None:
 
     # ---------------------------
-    # Other parameters
+    # Parameters
     # ---------------------------
     ae_tif = os.path.join(out_dir, f"radar_reflectivity_ae_{index}.tif")
     final_tif = os.path.join(out_dir, f"radar_reflectivity_3857_{index}.tif")
 
     pixel_size_m = 500.0   # 500 m spacing
-    channel_index = 1      # channel 1 (0-based)
+    channel_index = 1      # channel 1 = reflectivity (0-based)
 
     # ---------------------------
     # Load data
     # ---------------------------
     data = np.load(npz_path)
-    array = data['inputNF'] 
+    array = data['inputNF']
+    nfout = data['nfout'] if 'nfout' in data else None
 
-    # Flip vertically (upside down)
+    # Flip vertically
     array = np.flipud(array)
+    if nfout is not None:
+        nfout = np.flipud(nfout)
 
     refl = array[:, :, channel_index].astype(np.float64)
     ny, nx = refl.shape
 
     # ---------------------------
+    # Log data range for debugging
+    # ---------------------------
+    valid_mask = ~np.isnan(refl)
+    nan_count = np.count_nonzero(~valid_mask)
+    logger.info(
+        f"Reflectivity stats: shape={refl.shape}, "
+        f"NaN pixels={nan_count}/{refl.size}, "
+        f"valid min={np.nanmin(refl):.2f}, "
+        f"valid max={np.nanmax(refl):.2f}, "
+        f"valid mean={np.nanmean(refl):.2f}"
+    )
+    if nfout is not None:
+        logger.info(f"Gust-front pixels: {np.count_nonzero(nfout)}")
+
+    # ---------------------------
+    # Render to RGBA
+    # ---------------------------
+    rgba = _reflectivity_to_rgba(refl, nfout)
+
+    # ---------------------------
     # Spatial references
-    # use Azimuthal Equidistant for radar data
-    # no EPSG code, parameterize instead
+    # Azimuthal Equidistant centered on the radar
     # ---------------------------
     ae_srs = osr.SpatialReference()
     ae_srs.SetAE(
-        radar_lat,   # latitude of projection center
-        radar_lon,   # longitude of projection center
-        0.0,         # false easting
-        0.0          # false northing
+        radar_lat,
+        radar_lon,
+        0.0,
+        0.0
     )
     ae_srs.SetWellKnownGeogCS("WGS84")
-    logger.info(ae_srs.ExportToPrettyWkt())
 
     # ---------------------------
     # GeoTransform (centered on radar)
     # ---------------------------
-    origin_x = - (nx / 2) * pixel_size_m
-    origin_y = (ny / 2) * pixel_size_m
-    logger.info(f"origin_x, origin_y = {origin_x, origin_y}")
+    origin_x = -(nx / 2) * pixel_size_m
+    origin_y =  (ny / 2) * pixel_size_m
 
     geotransform = (
         origin_x,
@@ -112,29 +215,32 @@ def project_data(npz_path: str, radar_lat: float, radar_lon: float, out_dir: str
     )
 
     # ---------------------------
-    # Write Azmithual Equidistant GeoTIFF
+    # Write RGBA Azimuthal Equidistant GeoTIFF
     # ---------------------------
     driver = gdal.GetDriverByName("GTiff")
     ae_ds = driver.Create(
         ae_tif,
         nx,
         ny,
-        1,
-        gdal.GDT_Float64,
+        4,               # R, G, B, A
+        gdal.GDT_Byte,
         options=["COMPRESS=LZW", "TILED=YES"]
     )
 
     ae_ds.SetGeoTransform(geotransform)
     ae_ds.SetProjection(ae_srs.ExportToWkt())
 
-    band = ae_ds.GetRasterBand(1)
-    band.WriteArray(refl)
-    band.SetNoDataValue(-9999)
+    for band_idx in range(4):
+        band = ae_ds.GetRasterBand(band_idx + 1)
+        band.WriteArray(rgba[:, :, band_idx])
+
+    # Set alpha band interpretation
+    ae_ds.GetRasterBand(4).SetColorInterpretation(gdal.GCI_AlphaBand)
 
     ae_ds = None
 
     # ---------------------------
-    # Reproject to EPSG:3857 for leaflet
+    # Reproject to EPSG:3857 for Leaflet
     # ---------------------------
     warped_ds = gdal.Warp(
         "",
@@ -142,45 +248,8 @@ def project_data(npz_path: str, radar_lat: float, radar_lon: float, out_dir: str
         dstSRS="EPSG:3857",
         resampleAlg=gdal.GRA_NearestNeighbour,
         format="MEM",
-        dstNodata=-9999
+        dstAlpha=False,    # keep our existing alpha band
     )
-
-    # ---------------------------
-    # Fill nodata collar in EPSG:3857 output
-    # ---------------------------
-    band = warped_ds.GetRasterBand(1)
-
-    nodata = band.GetNoDataValue()
-    if nodata is None:
-        nodata = -9999
-        band.SetNoDataValue(nodata)
-
-    # Expand nearest valid pixels into nodata areas
-    gdal.FillNodata(
-        targetBand=band,
-        maskBand=None,
-        maxSearchDist=200,        # pixels to search outward (adjust if needed)
-        smoothingIterations=0     # 0 keeps nearest-neighbor style behavior
-    )
-
-    band.FlushCache()
-    warped_ds.FlushCache()
-
-    # ---------------------------
-    # Verify no nodata remains
-    # ---------------------------
-    arr = band.ReadAsArray()
-    nodata = band.GetNoDataValue()
-
-    if nodata is None:
-        logger.warning("No nodata value defined on band.")
-    else:
-        remaining = np.count_nonzero(arr == nodata)
-
-    if remaining == 0:
-        logger.info("Success: No nodata pixels remain in band.")
-    else:
-        logger.warning(f"Warning: {remaining} nodata pixels still present. Try increasing maxSearchDist.")
 
     # ---------------------------
     # Write final GeoTIFF
@@ -193,8 +262,5 @@ def project_data(npz_path: str, radar_lat: float, radar_lon: float, out_dir: str
     )
 
     warped_ds = None
-
-  
-
-    
+    logger.info(f"Wrote {final_tif}")
 
