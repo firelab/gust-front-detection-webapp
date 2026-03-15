@@ -19,7 +19,7 @@ class NfgdaService:
     async def run(self) -> None:
         """Execute the NFGDA algorithm and update job status in Redis."""
         try:
-            self.redis_client.hset(self.job_key, "status", "PROCESSING")
+            self.redis_client.hset(self.job_key, mapping={"status": "PROCESSING"})
 
             # create output directory
             os.makedirs(self.out_dir, exist_ok=True)
@@ -35,14 +35,12 @@ class NfgdaService:
             success, message = await runner.run()
 
             if success:
-                self.redis_client.hset(self.job_key, "status", "COMPLETED")
-                logger.info("Job %s completed successfully", self.job_id)
+                logger.info("Algorithm processing for job %s completed successfully", self.job_id)
             else:
-                self.redis_client.hset(self.job_key, "status", "FAILED")
-                self.redis_client.hset(self.job_key, "error_message", message)
+                self.redis_client.hset(self.job_key, mapping={"status": "FAILED", "error_message": message})
                 logger.warning("Job %s failed (runner returned falsy)", self.job_id)
                 logger.warning("Error message: %s", message)
 
         except Exception as e:
-            self.redis_client.hset(self.job_key, "status", "FAILED")
+            self.redis_client.hset(self.job_key, mapping={"status": "FAILED"})
             logger.exception("Job %s failed with exception: %s", self.job_id, e)

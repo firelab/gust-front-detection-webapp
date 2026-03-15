@@ -23,9 +23,15 @@ def send_job_to_redis_queue(redis_client, request_fields: dict):
     """
 
     # Validate stationId
-    if not request_fields.get("stationId"):
+    station_id = request_fields.get("stationId")
+    if not station_id:
         return jsonify({"error": "Missing stationId request field"}), 400
 
+    from src.station_service.station_service import StationService
+    try:
+        StationService(redis_client).get_station(station_id)
+    except ValueError:
+        return jsonify({"error": f"Invalid station ID: {station_id}"}), 400
     # Validate and/or set default timebox parameters
     validation_error = validate_time_parameters(request_fields)
     if validation_error:

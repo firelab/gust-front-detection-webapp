@@ -363,7 +363,7 @@ def ReadRadarSliceUpdate(radar, slice_idx):
 
 def convert_v06_to_nf_input(l2_file, path_config,debug=False):
     v06_file = os.path.join(path_config.V06_dir,l2_file)
-    if not (l2_file.endswith('_V06') or l2_file.startswith('._')):
+    if not (l2_file.endswith('_V06') or l2_file.endswith('_V08') or l2_file.startswith('._')):
         tprint(cv_tag+"Skip: ", l2_file)
         return
 
@@ -387,6 +387,7 @@ def convert_v06_to_nf_input(l2_file, path_config,debug=False):
     # Initialize data cube
     PARROT = np.ma.array(np.ma.array(np.full((END_GATE, NUM_AZ, 6), np.nan, dtype=np.float64)), mask=np.full((END_GATE, NUM_AZ, 6), True))
     in_parrot = np.full(6,False)
+    timestamp = None
 
     for slice_idx in range(nsweeps):
         radar_range, az_sweep_deg, radar_el, data_slice, mask_slice, labels_slice, data_mask_slice = ReadRadarSliceUpdate(
@@ -401,26 +402,47 @@ def convert_v06_to_nf_input(l2_file, path_config,debug=False):
 
         var_idx_slice = {labels_slice[i]: i for i in range(len(labels_slice))}
 
+        populated_any = False
         for var in var_2_parrot_idx.keys():
+            if var not in var_idx_slice:
+                continue
             i_var = var_idx_slice[var]
             i_parrot = var_2_parrot_idx[var]
 
             if not mask_slice[i_var] or in_parrot[i_parrot]:
                 continue
             in_parrot[i_parrot] = True
+            populated_any = True
 
             debug and tprint(cv_tag + "Processing {}. parrot idx {}".format(var, i_parrot))
 
             curr_data = data_slice[i_var][:, :END_GATE]
             curr_mask = data_mask_slice[i_var][:, :END_GATE]
-            # curr_data[curr_mask] = np.nan  # (720, 400)
+            
             curr_data = np.roll(a=curr_data, shift=az_shift, axis=0)
+            curr_mask = np.roll(a=curr_mask, shift=az_shift, axis=0)
+            
+            if curr_data.shape[0] == 360:
+                curr_data = np.repeat(curr_data, 2, axis=0)
+                curr_mask = np.repeat(curr_mask, 2, axis=0)
+            elif curr_data.shape[0] != NUM_AZ:
+                in_parrot[i_parrot] = False
+                continue
+                
             PARROT[:, :, i_parrot] = curr_data.T
             PARROT[:, :, i_parrot].mask = curr_mask.T
+
+        # Grab timestamp from the first sweep that contributed data
+        if populated_any and timestamp is None:
+            timestamp = np.datetime64(pyart.graph.common.generate_radar_time_sweep(radar_obj, slice_idx))
+            debug and tprint(cv_tag+"slice idx {} timestamp".format(slice_idx), timestamp)
+
         if np.min(in_parrot):
-            timestamp=np.datetime64(pyart.graph.common.generate_radar_time_sweep(radar_obj,slice_idx))
-            debug and tprint(cv_tag+"slice idx {} timestamp".format(slice_idx),timestamp)
             break
+
+    if timestamp is None:
+        tprint(cv_tag + f"Warning: No valid data extracted from {l2_file}, skipping save.")
+        return
     # scipy.io.savemat(output_path, {"PARROT": PARROT})
     np.savez(py_path, PARROT=PARROT.data,mask=PARROT.mask,timestamp=timestamp)
 

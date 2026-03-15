@@ -3,7 +3,7 @@
 Integration test script for the /APIs/run and /APIs/status endpoints.
 
 Fetches the station list from /APIs/stations, picks 3 random stations,
-sends run requests with 5-minute windows from the last hour (one per station),
+sends run requests with 10-minute windows from the last hour (one per station),
 plus a 4th request with a future endUtc that should be rejected.
 Then polls until all valid jobs report COMPLETED (or FAILED).
 """
@@ -88,13 +88,13 @@ def main():
     # ── Fetch 3 random station IDs from the stations API ─────────────
     station_ids = fetch_random_stations(3)
 
-    # ── Define 3 valid jobs: 5-minute windows within the last hour ───
+    # ── Define 3 valid jobs: 10-minute windows within the last hour ──
     # ── Plus 1 invalid job with endUtc in the future ─────────────────
     jobs_config = [
-        ("Job 1", station_ids[0], now - timedelta(minutes=60), now - timedelta(minutes=55)),
-        ("Job 2", station_ids[1], now - timedelta(minutes=45), now - timedelta(minutes=40)),
-        ("Job 3", station_ids[2], now - timedelta(minutes=30), now - timedelta(minutes=25)),
-        ("Job 4", station_ids[0], now - timedelta(minutes=5),  now + timedelta(minutes=10)),  # future — expect 400
+        ("Job 1", station_ids[0], now - timedelta(minutes=90), now - timedelta(minutes=75)),
+        ("Job 2", station_ids[1], now - timedelta(minutes=75), now - timedelta(minutes=60)),
+        ("Job 3", station_ids[2], now - timedelta(minutes=60), now - timedelta(minutes=45)),
+        ("Job 4", station_ids[0], now - timedelta(minutes=10),  now + timedelta(minutes=25)),  # future — expect 400
     ]
 
     job_ids: list[str | None] = []

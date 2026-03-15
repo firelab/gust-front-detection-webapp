@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
-MAX_NO_DATA_POLLS = 10
+MAX_NO_DATA_POLLS = int(os.getenv("MAX_NO_DATA_POLLS", "10"))
 
 class NfgdaRunner:
     """Executes the NFGDA algorithm for a given run request."""
@@ -42,7 +42,9 @@ class NfgdaRunner:
         Returns:
             bool: True if the NFGDA process completed successfully, False otherwise.
         """
-
+        
+        logger.info(f"timebox parameters set to start_utc: {self.start_utc}, end_utc: {self.end_utc}")
+        
         config_path = self.create_temp_config(self.out_dir)
         logger.info("setting environment variable NFGDA_CONFIG_PATH to %s", config_path)
         
@@ -50,7 +52,7 @@ class NfgdaRunner:
             return False, "Failed to create config file"
 
         logger.info("running algorithm for job %s", self.job_id)
-        state = {"no_data_count": 0}
+        state = {"no_data_count": 0, "fatal_error_count": 0}
 
         try:
             # Build an env dict with the per-job config path
@@ -97,10 +99,17 @@ class NfgdaRunner:
                     "NFGDA algorithm exited with code %d",
                     proc.returncode,
                 )
-                return False, f"An error occurred processing the algorithm. Error code: {proc.returncode}"
+                return False, f"an error occurred processing the algorithm. Error code: {proc.returncode}"
+
+            # Check if fatal errors were logged during processing
+            if state["fatal_error_count"] > 0:
+                logger.error(
+                    "NFGDA algorithm reported %d fatal error(s) during processing",
+                    state["fatal_error_count"],
+                )
+                return False, f"NFGDA algorithm encountered {state['fatal_error_count']} fatal error(s) during processing"
 
             # woo algorithm dun did its jerb
-            logger.info("algorithm processing completed for job %s", self.job_id)
             return True, None
 
         finally:
@@ -182,6 +191,9 @@ class NfgdaRunner:
                         return
                 elif "new volume" in text:
                     state["no_data_count"] = 0
+
+                if "fatal error" in text.lower():
+                    state["fatal_error_count"] += 1
 
     
 

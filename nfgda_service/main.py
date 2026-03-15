@@ -3,6 +3,7 @@ import asyncio
 import redis
 import logging
 from nfgda_service import NfgdaService
+from process_output import generate_geotiff_output
 
 logging.basicConfig(
     level=logging.INFO,
@@ -28,10 +29,27 @@ async def process_job(job_id: str) -> None:
     service = NfgdaService(redis_client, job_id, job_fields, out_dir)
     await service.run()
 
+def process_geotiff_output(job_id: str) -> None:
+    """Process the output of the NFGDA algorithm for a given job
+    into a stack of GeoTIFFs for final display on the frontend."""
+    if redis_client.hget(f"job:{job_id}", "status") == "FAILED":
+        return
+
+    logger.info("Generating GeoTIFF series for job %s", job_id)
+    result = generate_geotiff_output(job_id, redis_client)
+        
+    if result is not None:
+        logger.error("Failed to generate GeoTIFF series for job %s. Error message: %s", job_id, result)
+        redis_client.hset(f"job:{job_id}", mapping={"status": "FAILED", "error_message": result})
+    else:
+        logger.info("Successfully generated GeoTIFF series for job %s", job_id)
+        redis_client.hset(f"job:{job_id}", mapping={"status": "COMPLETED"})
+
 async def run_and_release_job(job_id: str) -> None:
     """Run a job and release the semaphore when finished."""
     try:
         await process_job(job_id)
+        process_geotiff_output(job_id)
     finally:
         # they took my jerb!
         job_semaphore.release()
@@ -42,7 +60,7 @@ def upate_redis_with_output_dir(job_id: str, out_dir: str) -> None:
 
 def format_output_directory(job_id: str) -> str:
     """Format the output directory for a job."""
-    out_dir = f"/job_results/{job_id}/"
+    out_dir = f"/nfgda_output/{job_id}/"
     os.makedirs(out_dir, exist_ok=True)
     return out_dir
 
