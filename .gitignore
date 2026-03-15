@@ -38,3 +38,5 @@ gust-front-detection-webapp/backend/apis/wills_notes.txt
 # Output
 **/nfgda_output/
 **/processed_data/
+*.tif
+

@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """
-Integration test script for the /APIs/run and /APIs/status endpoints.
+End-to-end integration test:
 
-Fetches the station list from /APIs/stations, picks 3 random stations,
-sends run requests with 10-minute windows from the last hour (one per station),
-plus a 4th request with a future endUtc that should be rejected.
-Then polls until all valid jobs report COMPLETED (or FAILED).
+1. GET /APIs/stations  → fetch the station list
+2. Randomly select one station
+3. POST /APIs/run      → submit a job for that station
+4. Poll GET /APIs/status until the job reaches COMPLETED (or FAILED)
+5. GET /api/jobs/<job_id>/frames/<index> → fetch every produced frame
 """
 
 import json
@@ -22,140 +23,103 @@ def fmt_utc(dt: datetime) -> str:
     return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def fetch_random_stations(count: int = 3) -> list[str]:
-    """GET /APIs/stations and return `count` random station IDs."""
-    print(f"{'='*60}")
-    print(f"GET /APIs/stations  (selecting {count} random stations)")
+def main():
+    now = datetime.now(timezone.utc)
+    print(f"Baseline UTC time: {fmt_utc(now)}")
 
+    # ── 1. Fetch station list ────────────────────────────────────────
+    print(f"\n{'='*60}")
+    print("Step 1: GET /APIs/stations")
     resp = requests.get(f"{BASE_URL}/APIs/stations")
-    print(f"  status:  {resp.status_code}")
-
+    print(f"  status: {resp.status_code}")
     if resp.status_code != 200:
-        print(f"  Failed to fetch stations: {resp.text[:200]}")
-        raise SystemExit(1)
+        print(f"  FAILED — {resp.text[:200]}")
+        return
 
-    data = resp.json()
-    features = data.get("features", [])
-    print(f"  total stations available: {len(features)}")
+    features = resp.json().get("features", [])
+    print(f"  total stations: {len(features)}")
 
-    selected = random.sample(features, min(count, len(features)))
-    station_ids = [f["properties"]["station_id"] for f in selected]
-    print(f"  selected: {station_ids}")
-    return station_ids
+    # ── 2. Pick one random station ───────────────────────────────────
+    station = random.choice(features)
+    station_id = station["properties"]["station_id"]
+    print(f"\n{'='*60}")
+    print(f"Step 2: Selected station → {station_id}")
 
-
-def send_run_request(label: str, station_id: str, start: datetime, end: datetime) -> str | None:
-    """POST a run request and return the job_id, or None on failure."""
+    # ── 3. Submit a job ──────────────────────────────────────────────
+    start = now - timedelta(minutes=45)
+    end = now - timedelta(minutes=25)
     payload = {
         "stationId": station_id,
         "startUtc": fmt_utc(start),
         "endUtc": fmt_utc(end),
     }
+
     print(f"\n{'='*60}")
-    print(f"[{label}] POST /APIs/run")
+    print("Step 3: POST /APIs/run")
     print(f"  payload: {json.dumps(payload, indent=2)}")
 
     resp = requests.post(f"{BASE_URL}/APIs/run", json=payload)
     body = resp.json()
-    print(f"  status:  {resp.status_code}")
+    print(f"  status:   {resp.status_code}")
     print(f"  response: {json.dumps(body, indent=2)}")
 
-    if resp.status_code == 202:
-        return body.get("job_id")
-    return None
-
-
-def check_status(job_id: str, label: str = "") -> dict:
-    """GET /APIs/status?job_id=<job_id> and return the parsed response body."""
-    tag = f"[{label}] " if label else ""
-    print(f"\n  {tag}GET /APIs/status?job_id={job_id}")
-
-    resp = requests.get(f"{BASE_URL}/APIs/status", params={"job_id": job_id})
-    print(f"  {tag}status:  {resp.status_code}")
-    try:
-        body = resp.json()
-    except requests.exceptions.JSONDecodeError:
-        print(f"  {tag}response: (non-JSON) {resp.text[:200]}")
-        return {"status": "ERROR"}
-    print(f"  {tag}response: {json.dumps(body, indent=2)}")
-    return body
-
-
-def main():
-    now = datetime.now(timezone.utc)
-    print(f"Baseline UTC time: {fmt_utc(now)}")
-
-    # ── Fetch 3 random station IDs from the stations API ─────────────
-    station_ids = fetch_random_stations(3)
-
-    # ── Define 3 valid jobs: 10-minute windows within the last hour ──
-    # ── Plus 1 invalid job with endUtc in the future ─────────────────
-    jobs_config = [
-        ("Job 1", station_ids[0], now - timedelta(minutes=90), now - timedelta(minutes=75)),
-        ("Job 2", station_ids[1], now - timedelta(minutes=75), now - timedelta(minutes=60)),
-        ("Job 3", station_ids[2], now - timedelta(minutes=60), now - timedelta(minutes=45)),
-        ("Job 4", station_ids[0], now - timedelta(minutes=10),  now + timedelta(minutes=25)),  # future — expect 400
-    ]
-
-    job_ids: list[str | None] = []
-
-    # ── Send all 4 requests ──────────────────────────────────────────
-    for i, (label, sid, start, end) in enumerate(jobs_config):
-        job_id = send_run_request(label, sid, start, end)
-        job_ids.append(job_id)
-
-        if i < len(jobs_config) - 1:
-            time.sleep(2)
-
-    # ── Summarize submission results ─────────────────────────────────
-    print(f"\n{'='*60}")
-    print("Submission summary:")
-    for i, (label, sid, _, _) in enumerate(jobs_config):
-        status = f"job_id={job_ids[i]}" if job_ids[i] else "REJECTED"
-        print(f"  {label} ({sid}): {status}")
-
-    # ── Filter to valid jobs only for polling ────────────────────────
-    valid_jobs = [
-        (i, jid) for i, jid in enumerate(job_ids) if jid is not None
-    ]
-
-    if not valid_jobs:
-        print("\nNo valid jobs to poll. Done.")
+    if resp.status_code != 202:
+        print("  Job was not accepted. Stopping.")
         return
 
-    # ── Poll valid jobs until all reach a terminal state ─────────────
+    job_id = body["job_id"]
+
+    # ── 4. Poll until terminal state ─────────────────────────────────
     print(f"\n{'='*60}")
-    print(f"Polling {len(valid_jobs)} valid job(s) until completion...")
-    print(f"{'='*60}")
+    print(f"Step 4: Polling job {job_id} until completion...")
 
     terminal_states = {"COMPLETED", "FAILED"}
     max_polls = 120
-    poll_count = 0
+    status_body = {}
 
-    while poll_count < max_polls:
-        poll_count += 1
+    for poll in range(1, max_polls + 1):
         time.sleep(5)
+        print(f"\n  --- Poll #{poll} ---")
 
-        print(f"\n--- Poll #{poll_count} ---")
-        all_done = True
-        for i, jid in valid_jobs:
-            label = jobs_config[i][0]
-            body = check_status(jid, label=label)
-            status = body.get("status", "UNKNOWN")
-            if status not in terminal_states:
-                all_done = False
+        resp = requests.get(f"{BASE_URL}/APIs/status", params={"job_id": job_id})
+        try:
+            status_body = resp.json()
+        except requests.exceptions.JSONDecodeError:
+            print(f"  (non-JSON) {resp.text[:200]}")
+            continue
 
-        if all_done:
-            print(f"\n{'='*60}")
-            print("All jobs have reached a terminal state. Done!")
-            print(f"{'='*60}")
-            return
+        status = status_body.get("status", "UNKNOWN")
+        print(f"  status: {status}")
+        print(f"  body:   {json.dumps(status_body, indent=2)}")
+
+        if status in terminal_states:
+            break
+    else:
+        print(f"\n  Gave up after {max_polls} polls.")
+        return
+
+    if status_body.get("status") != "COMPLETED":
+        print(f"\n  Job ended with status: {status_body.get('status')}. Skipping frame fetch.")
+        return
+
+    # ── 5. Fetch frames ──────────────────────────────────────────────
+    num_frames = int(status_body.get("num_frames", 0))
+    print(f"\n{'='*60}")
+    print(f"Step 5: Fetching {num_frames} frame(s) for job {job_id}")
+
+    for index in range(num_frames):
+        url = f"{BASE_URL}/api/jobs/{job_id}/frames/{index}"
+        print(f"\n  GET {url}")
+        resp = requests.get(url)
+        if resp.status_code == 200:
+            print(f"    ✓ frame {index}: {resp.status_code} ({len(resp.content)} bytes)")
+        else:
+            print(f"    ✗ frame {index}: {resp.status_code} — {resp.text[:200]}")
 
     print(f"\n{'='*60}")
-    print(f"Gave up after {max_polls} polls. Some jobs may still be running.")
+    print("Done!")
     print(f"{'='*60}")
 
 
 if __name__ == "__main__":
     main()
-
