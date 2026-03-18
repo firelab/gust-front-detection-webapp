@@ -18,7 +18,7 @@ export default function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentMode, setCurrentMode] = useState(true);
   const [selectedStation, setSelectedStation] = useState("");
-  const [selectedDateTime, setSelectedDateTime] = useState(dayjs().tz(dayjs.tz.guess()).startOf('hour'));
+  const [selectedDateTime, setSelectedDateTime] = useState(dayjs().tz(dayjs.tz.guess()));
   const [timezone, setTimezone] = useState(dayjs.tz.guess());
   
   // --------------------------------------- HANDLERS ----------------------------------------
@@ -113,21 +113,22 @@ export default function App() {
                   onChange={handleTimezoneChange}
                 >
                   <MenuItem value="UTC">UTC</MenuItem>
+                  <MenuItem value="America/Anchorage">Alaska</MenuItem>
                   <MenuItem value="America/Los_Angeles">Pacific</MenuItem>
                   <MenuItem value="America/Denver">Mountain</MenuItem>
                   <MenuItem value="America/Chicago">Central</MenuItem>
                   <MenuItem value="America/New_York">Eastern</MenuItem>
-                  <MenuItem value="America/Anchorage">Alaska</MenuItem>
                 </Select>
               </FormControl>
               {/* Date Time Selector */}
               <LocalizationProvider dateAdapter={AdapterDayjs}>
                 <DateTimePicker
                   disabled={!currentMode}
-                  views={['year', 'month', 'day', 'hours']}
+                  views={['year', 'month', 'day', 'hours', 'minutes']}
+                  ampm={false}
                   label="Radar Data Start Time"
                   value={selectedDateTime}
-                  onChange={(newValue) => setSelectedDateTime(dayjs(newValue).tz(timezone).startOf('hour'))}
+                  onChange={(newValue) => setSelectedDateTime(dayjs(newValue).tz(timezone))}
                   defaultValue={dayjs('2026-03-11T15:00')}
                   className='flex-1'
                 />
