@@ -20,6 +20,8 @@ export default function App() {
   const [selectedStation, setSelectedStation] = useState("");
   const [selectedDateTime, setSelectedDateTime] = useState(dayjs().tz(dayjs.tz.guess()));
   const [timezone, setTimezone] = useState(dayjs.tz.guess());
+  const [jobStatus, setjobStatus] = useState("NONE");
+  const [jobId, setjobId] = useState("");
   
   // --------------------------------------- HANDLERS ----------------------------------------
 
@@ -49,7 +51,8 @@ export default function App() {
         throw new Error(`Request failed with status ${response.status}`);
       }
       const data = await response.json();
-      console.log(data)
+      console.log(data);
+      setjobId(data.job_id);
     } catch (err) {
       console.error(err)
     }
@@ -70,6 +73,27 @@ export default function App() {
 
     loadStations();
   }, []);
+
+  // get the status of the job from APIs/job_status every 5 seconds until the job is completed or failed
+  useEffect(() => {
+    if (!jobId) return;
+    if (jobStatus === "COMPLETED" || jobStatus === "FAILED") {
+      return;
+    }
+    
+    const intervalId = setInterval(async () => {
+      try {
+        const response = await fetch(`/APIs/status?job_id=${jobId}`);
+        const data = await response.json();
+        console.log(data);
+        setjobStatus(data.status);
+      } catch (err) {
+        console.error(err);
+      }
+    }, 5000);
+  
+    return () => clearInterval(intervalId);
+  }, [jobId, jobStatus]);
 
   // timezone change handler
   function handleTimezoneChange(event) {
