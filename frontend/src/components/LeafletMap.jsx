@@ -25,7 +25,8 @@ function DisplayPosition({ map, mapLatLng, setMapLatLng }) {
 export default function LeafletMap({
   stations = [],
   selectedStation,
-  setSelectedStation
+  setSelectedStation,
+  frames = []
 }) {
   const [map, setMap] = useState(null)
   const [mapLatLng, setMapLatLng] = useState({ "lat": 40.0, "lng": -98.0 });
@@ -93,8 +94,9 @@ export default function LeafletMap({
           </Marker>
         )
       })}
-        
-        <GeotiffLayer />
+        {frames.length > 0 && (
+          <GeotiffLayer frame={String(frames[0])} />
+        )}
       </MapContainer>
     </div>
   )
