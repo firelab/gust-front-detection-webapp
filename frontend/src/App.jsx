@@ -75,11 +75,11 @@ useEffect(() => {
   async function fetchFrames() {
     if (jobStatus !== "COMPLETED" || !jobId || numFrames <= 0) return;
 
-    console.log(`attempting to fetch ${numFrames} frames...`);
+    console.log(`attempting to fetch ${numFrames} frames for job ${jobId}`);
 
     try {
       const promises = Array.from({ length: numFrames }, (_, i) =>
-        fetch(`/api/jobs/${jobId}/frames/${i}`)
+        fetch(`/APIs/jobs/${jobId}/frames/${i}`)
           .then(res => {
             if (!res.ok) throw new Error(`Failed frame ${i}`);
             return res.blob();
@@ -89,7 +89,7 @@ useEffect(() => {
 
       const urls = await Promise.all(promises);
       setFrames(urls);
-      console.log("Frames fetched successfully: ", frames);
+      console.log("Frames fetched successfully: ", urls);
     } catch (err) {
       console.error("Error fetching frames:", err);
     }
