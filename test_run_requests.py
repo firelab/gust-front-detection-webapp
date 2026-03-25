@@ -108,7 +108,7 @@ def main():
     print(f"Step 5: Fetching {num_frames} frame(s) for job {job_id}")
 
     for index in range(num_frames):
-        url = f"{BASE_URL}/api/jobs/{job_id}/frames/{index}"
+        url = f"{BASE_URL}/APIs/jobs/{job_id}/frames/{index}"
         print(f"\n  GET {url}")
         resp = requests.get(url)
         if resp.status_code == 200:
