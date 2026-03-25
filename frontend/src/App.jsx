@@ -2,7 +2,7 @@ import Container from '@mui/material/Container';
 import 'leaflet/dist/leaflet.css';
 import LeafletMap from './components/LeafletMap'
 import RadarStationDropdown from "./components/RadarStationDropdown";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import dayjs from './utils/dayjsConfig';
 
 // MUI
@@ -14,17 +14,24 @@ import { Slider, Button, Select, MenuItem, FormControl, InputLabel, Checkbox } f
 
 export default function App() {
 
+  // User Selection State
   const [stations, setStations] = useState([]);
-  const [isPlaying, setIsPlaying] = useState(false);
   const [currentMode, setCurrentMode] = useState(true);
   const [selectedStation, setSelectedStation] = useState("");
   const [selectedDateTime, setSelectedDateTime] = useState(dayjs().tz(dayjs.tz.guess()));
   const [timezone, setTimezone] = useState(dayjs.tz.guess());
+
+  // API State
   const [jobStatus, setjobStatus] = useState("NONE");
   const [jobId, setjobId] = useState("");
   const [numFrames, setNumFrames] = useState(0);
   const [frames, setFrames] = useState([]);
   const [errorMessage, setErrorMessage] = useState("");
+
+  // Playback State
+  const [currentFrameIndex, setCurrentFrameIndex] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const playbackRef = useRef(null);
   
   // --------------------------------------- HANDLERS ----------------------------------------
 
@@ -51,6 +58,10 @@ export default function App() {
       }
       // ---- make request ----
       setjobStatus("NONE");
+      setErrorMessage("");
+      setjobId("");
+      setNumFrames(0);
+      setFrames([]);
       const response = await fetch("/APIs/run", {
         method: 'POST',
         headers: {
@@ -74,9 +85,7 @@ export default function App() {
 useEffect(() => {
   async function fetchFrames() {
     if (jobStatus !== "COMPLETED" || !jobId || numFrames <= 0) return;
-
     console.log(`attempting to fetch ${numFrames} frames for job ${jobId}`);
-
     try {
       const promises = Array.from({ length: numFrames }, (_, i) =>
         fetch(`/APIs/jobs/${jobId}/frames/${i}`)
@@ -86,7 +95,6 @@ useEffect(() => {
           })
           .then(blob => URL.createObjectURL(blob))
       );
-
       const urls = await Promise.all(promises);
       setFrames(urls);
       console.log("Frames fetched successfully: ", urls);
@@ -94,7 +102,6 @@ useEffect(() => {
       console.error("Error fetching frames:", err);
     }
   }
-
   fetchFrames();
 }, [jobStatus, jobId, numFrames]);
 
@@ -103,14 +110,11 @@ useEffect(() => {
     async function loadStations() {
       const response = await fetch("/APIs/stations");
       const stationJson = await response.json();
-
       const nextStations = Array.isArray(stationJson?.features)
         ? stationJson.features
         : [];
-
       setStations(nextStations);
     }
-
     loadStations();
   }, []);
 
@@ -120,7 +124,6 @@ useEffect(() => {
     if (jobStatus === "COMPLETED" || jobStatus === "FAILED") {
       return;
     }
-    
     const intervalId = setInterval(async () => {
       try {
         const response = await fetch(`/APIs/status?job_id=${jobId}`);
@@ -141,20 +144,36 @@ useEffect(() => {
           console.error(err);
         }
     }, 5000);
-  
     return () => clearInterval(intervalId);
   }, [jobId, jobStatus]);
 
   // timezone change handler
   function handleTimezoneChange(event) {
     const newTZ = event.target.value
-
     setTimezone(newTZ)
-
     if (selectedDateTime) {
       setSelectedDateTime(selectedDateTime.tz(newTZ))
     }
   }
+
+  // Handle Playback
+  useEffect(() => {
+    if (isPlaying) {
+      playbackRef.current = setInterval(() => {
+        setCurrentFrameIndex((prev) => (prev + 1) % frames.length);
+      }, 750);
+    } else {
+      clearInterval(playbackRef.current);
+    }
+
+    return () => clearInterval(playbackRef.current);
+  }, [isPlaying, frames.length]);
+
+  // Handle Slider Change
+  const handleSliderChange = (event, newValue) => {
+    setIsPlaying(false);
+    setCurrentFrameIndex(newValue);
+  };
 
   // ---------------------------------------- JSX ----------------------------------------
 
@@ -221,23 +240,22 @@ useEffect(() => {
         <p>Job Status: {jobStatus}</p>
         <p className='text-red-800 font-bold'>{errorMessage}</p>
 
-          <div className=" flex w-full mt-20 mb-2 items-center">
-            <button 
-              onClick={()=>{setIsPlaying(!isPlaying)}}
-              className='mr-4 cursor-pointer text-white rounded-full bg-[#1976d2] hover:bg-[#1565c0] shadow hover:shadow-lg transition-all flex p-3 h-max'>
-              {isPlaying ? <PauseIcon /> : <PlayArrowIcon />}
-            </button>
-            <Slider
-              defaultValue={30}
-              valueLabelDisplay="auto"
-              shiftStep={30}
-              step={10}
-              marks
-              min={10}
-              max={110}
-            />
-            <p className='w-[20%] ml-4'>KABX 03:20 PM</p> {/* hardcoded for now */}
-          </div>
+        <div className="flex w-full mt-20 mb-2 items-center px-4">
+          <button 
+            onClick={() => setIsPlaying(!isPlaying)}
+            className='mr-4 cursor-pointer text-white rounded-full bg-[#1976d2] hover:bg-[#1565c0] shadow hover:shadow-lg transition-all flex p-3 h-max'>
+            {isPlaying ? <PauseIcon /> : <PlayArrowIcon />}
+          </button>
+          <Slider
+            value={currentFrameIndex}
+            min={0}
+            max={frames.length - 1}
+            step={1}
+            onChange={handleSliderChange}
+            valueLabelDisplay="auto"
+            marks={frames.map((_, i) => ({ value: i }))}
+          />
+        </div>
 
         <Container className='bg-gray-50 min-h-100' >
           <LeafletMap
@@ -245,6 +263,7 @@ useEffect(() => {
             selectedStation={selectedStation}
             setSelectedStation={setSelectedStation}
             frames={frames}
+            currentFrameIndex={currentFrameIndex}
           />
         </Container>
 

@@ -1,11 +1,11 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useMap } from "react-leaflet";
 import parseGeoraster from "georaster";
 import GeoRasterLayer from "georaster-layer-for-leaflet";
 
-export default function GeotiffLayer({ frame }) {
+export default function GeotiffLayer({ frame, isVisible }) {
   const map = useMap();
-  console.log("rendering frame: " + frame);
+  const layerRef = useRef(null);
 
   useEffect(() => {
     let layer;
@@ -17,8 +17,8 @@ export default function GeotiffLayer({ frame }) {
 
       layer = new GeoRasterLayer({
         georaster,
-        opacity: 1,
-        resolution: 256,
+        opacity: isVisible ? 1 : 0,
+        resolution: 64,
         pixelValuesToColorFn: (values) => {
         const [r, g, b, a] = values;
           // If the alpha channel is 0, return null to make it fully transparent
@@ -29,15 +29,22 @@ export default function GeotiffLayer({ frame }) {
       });
 
       layer.addTo(map);
+      layerRef.current = layer;
       map.fitBounds(layer.getBounds());
     }
 
     loadTiff();
 
     return () => {
-      if (layer) map.removeLayer(layer);
+      if (layerRef.current) map.removeLayer(layerRef.current);
     };
   }, [map, frame]);
+
+  useEffect(() => {
+    if (layerRef.current) {
+      layerRef.current.setOpacity(isVisible ? 1 : 0);
+    }
+  }, [isVisible]);
 
   return null;
 }

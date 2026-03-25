@@ -26,7 +26,8 @@ export default function LeafletMap({
   stations = [],
   selectedStation,
   setSelectedStation,
-  frames = []
+  frames = [],
+  currentFrameIndex
 }) {
   const [map, setMap] = useState(null)
   const [mapLatLng, setMapLatLng] = useState({ "lat": 40.0, "lng": -98.0 });
@@ -35,7 +36,7 @@ export default function LeafletMap({
     if (!map || !selectedStation) return
     const [lng, lat] = selectedStation.geometry.coordinates
     const latLng = [lat, lng]
-    map.setView(latLng, 8)
+    map.setView(latLng, 9)
     setMapLatLng(map.getCenter())
   }, [selectedStation, map, setMapLatLng])
 
@@ -94,9 +95,14 @@ export default function LeafletMap({
           </Marker>
         )
       })}
-        {frames.length > 0 && (
-          <GeotiffLayer frame={String(frames[0])} />
-        )}
+          {frames.map((url, index) => (
+             <GeotiffLayer 
+             key={url} 
+             frame={url} 
+             isVisible={index === currentFrameIndex} 
+             />
+             ))}
+           
       </MapContainer>
     </div>
   )
