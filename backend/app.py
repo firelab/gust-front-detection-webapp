@@ -37,7 +37,7 @@ def run_endpoint():
     
 
 # Frame Data API
-@app.route("/api/jobs/<job_id>/frames/<int:index>", methods=["GET"])
+@app.route("/APIs/jobs/<job_id>/frames/<int:index>", methods=["GET"])
 def get_frame(job_id, index):
     """Takes job ID and frame index, returns a single GeoTIFF file."""
     
