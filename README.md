@@ -11,43 +11,39 @@ This is a prototype web interface to interact with the gust front detection algo
 - [Docker](#docker)
 - [Deployment](#deployment)
 
-# Prerequisites
+# How To Run 
 
-How to setup dependencies for project.
+First time running project?
+1. Navigate to project directory containing `docker-compose.yml'
+2. Run `docker compose up -d --build'
+3. Navigate to http://localhost:5173
+4. Play widdit
 
 # Frontend
 
-To build the frontend:
-
-1. Clone this repository with `git clone`
-2. Navigate to the frontend directory with `cd /gust-front-detection-webapp/frontend`
-3. Install packages with `npm install`
-4. Run frontend with `npm run dev`
-
-The frontend is now accessible at `http://localhost:5173/`
 
 # Backend
 
-TODO: Add instructions on how to build and run the backend.
+Backend directory structure: 
+- app.py contains the API endpoints
+- /apis contains the API endpoint definitions
+- API call logic defined in src/
+- src/ contains the backend logic (Not responsible for API endpoints that orchestrate or handle HTTP requests - Contains the business logic of the application only)
 
-Backend directory structure: - app.py contains the API endpoints - apis/ contains the API endpoint definitions - api definitions found here call logic defined in src/ - src/ contains the backend logic - Not responsible for API endpoints that orchestrate or handle HTTP requests - Contains the business logic of the application only
-
-# Docker
-
-Describe how to containerize and run the project
-
-# Deployment
-
-Explain how the application is deployed
 
 # Todo
 
 - Guard against short jobs that run forever for some reason
-- Remove "expired" job files and produced resources after set amount of time
+- Figure out zoom level / blank frame issue on frontend
+- Switching to a new station view pauses slide deck playthrough
+- Convert geotiff output to cloud-optimized-geotiffs
+- Remove "expired" job files and produced resources after set amount of time 
 - Figure out what is a "reasonable" time to run a historical job and set a hard limit
+- Code cleanup / add comments where necessary
 
 # "Nice to have" features
 
-- Average time to job completion estimator
-- Serve tiles instead of individual GeoTIFFs
-- Hash job IDs to make them unguessable, so resources can't be directly accessed via URL
+- Average time to job completion estimator (small addition: new counter in redis, average out)
+- Serve tiles instead of individual GeoTIFFs (big refactor)
+- Hash job IDs to make them unguessable, so resources can't be directly accessed via URL (little development effort, likely med/large refactor effort)
+- 
