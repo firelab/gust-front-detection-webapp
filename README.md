@@ -41,4 +41,11 @@ Backend directory structure:
 - Average time to job completion estimator (small addition: new counter in redis, average out)
 - Serve tiles instead of individual GeoTIFFs (big refactor)
 - Hash job IDs to make them unguessable, so resources can't be directly accessed via URL (little development effort, likely med/large refactor effort)
+
+
+# License
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+Copyright (c) 2026 Montana State University
+
   
