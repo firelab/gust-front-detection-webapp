@@ -1,15 +1,6 @@
-# gust-front-detection-webapp
+## gust-front-detection-webapp
 
 This is a prototype web interface to interact with the gust front detection algorithm found [here](https://github.com/firelab/NFGDA).
-
-## Table of Contents
-
-- [Prerequisites](#prerequisites)
-- [Architecture Overview](#architecture-overview)
-- [Frontend](#frontend)
-- [Backend](#backend)
-- [Docker](#docker)
-- [Deployment](#deployment)
 
 # How To Run 
 
@@ -18,6 +9,10 @@ First time running project?
 2. Run `docker compose up -d --build'
 3. Navigate to http://localhost:5173
 4. Play widdit
+
+- To re-launch app, run `docker compose up -d`
+- To restart docker containers, run `docker compose restart -d`
+
 
 # Frontend
 
@@ -31,7 +26,7 @@ Backend directory structure:
 - src/ contains the backend logic (Not responsible for API endpoints that orchestrate or handle HTTP requests - Contains the business logic of the application only)
 
 
-# Todo
+# Todo (before MSU handoff)
 
 - Guard against short jobs that run forever for some reason
 - Figure out zoom level / blank frame issue on frontend
@@ -46,4 +41,4 @@ Backend directory structure:
 - Average time to job completion estimator (small addition: new counter in redis, average out)
 - Serve tiles instead of individual GeoTIFFs (big refactor)
 - Hash job IDs to make them unguessable, so resources can't be directly accessed via URL (little development effort, likely med/large refactor effort)
-- 
+  
