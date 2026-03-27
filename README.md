@@ -32,8 +32,8 @@ Backend directory structure:
 - Figure out zoom level / blank frame issue on frontend
 - Switching to a new station view pauses slide deck playthrough
 - Convert geotiff output to cloud-optimized-geotiffs
-- Remove "expired" job files and produced resources after set amount of time 
-- Figure out what is a "reasonable" time to run a historical job and set a hard limit
+- Remove "expired" job files and produced resources after 24 hours (set to env variable)
+- Figure out what is a "reasonable" time to run a historical job and set a hard limit (Natalie said a few hours, we'll set it to 3 to start with in env)
 - Code cleanup / add comments where necessary
 
 # "Nice to have" features
