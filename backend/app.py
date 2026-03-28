@@ -12,7 +12,7 @@ app = Flask(__name__)
 redis_client = redis.Redis(host='redis', port=6379, db=0, decode_responses=True)
 
 # Station List API
-@app.route("/APIs/stations", methods=["GET"])
+@app.route("/apis/stations", methods=["GET"])
 def stations_endpoint():
     """
     Returns:
@@ -27,7 +27,7 @@ def stations_endpoint():
 
 
 # Algorithm Runner API
-@app.route("/APIs/run", methods=["POST"])
+@app.route("/apis/run", methods=["POST"])
 def run_endpoint():
     """Takes station and time frame args, kicks off an NFGDA processing job, and returns the new job ID and status code."""
     if not request.json:
@@ -37,7 +37,7 @@ def run_endpoint():
     
 
 # Frame Data API
-@app.route("/APIs/jobs/<job_id>/frames/<int:index>", methods=["GET"])
+@app.route("/apis/jobs/<job_id>/frames/<int:index>", methods=["GET"])
 def get_frame(job_id, index):
     """Takes job ID and frame index, returns a single GeoTIFF file."""
     
@@ -57,7 +57,7 @@ def get_frame(job_id, index):
 
 
 # Job Status API
-@app.route("/APIs/status", methods=["GET"])
+@app.route("/apis/status", methods=["GET"])
 def status_endpoint():
     """Takes job ID, returns status."""
     job_id = request.args.get("job_id")

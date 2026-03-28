@@ -1,4 +1,5 @@
 
+import os
 import uuid
 from datetime import datetime, timedelta, timezone
 from flask import jsonify
@@ -15,14 +16,14 @@ def send_job_to_redis_queue(redis_client, request_fields: dict):
     Response shape:
     {
         "job_id": "<jobId>",
-        "status": 200
+        "status": 202
         OR
         "error": "<error message>",
         "status": 400
     }
     """
 
-    # Validate stationId
+    # validate stationId
     station_id = request_fields.get("stationId")
     if not station_id:
         return jsonify({"error": "Missing stationId request field"}), 400
@@ -32,7 +33,8 @@ def send_job_to_redis_queue(redis_client, request_fields: dict):
         StationService(redis_client).get_station(station_id)
     except ValueError:
         return jsonify({"error": f"Invalid station ID: {station_id}"}), 400
-    # Validate and/or set default timebox parameters
+    
+    # validate and/or set default timebox parameters
     validation_error = validate_time_parameters(request_fields)
     if validation_error:
         return validation_error, 400
@@ -46,11 +48,14 @@ def send_job_to_redis_queue(redis_client, request_fields: dict):
 
     # add job to redis
     job_key = f"job:{job_id}"
+    expiry_minutes = int(os.getenv("FILE_EXPIRATION_TIME", "1440"))
+    expiry_timestamp = (datetime.now(timezone.utc) + timedelta(minutes=expiry_minutes)).strftime("%Y-%m-%dT%H:%M:%SZ")
     redis_client.hset(job_key, mapping={
         "stationId": request_fields["stationId"],
         "startUtc": request_fields["startUtc"],
         "endUtc": request_fields["endUtc"],
-        "status": "PENDING"
+        "status": "PENDING",
+        "asset_expiry_timestamp": expiry_timestamp
     })
 
     # push job id to job queue
@@ -88,12 +93,14 @@ def validate_time_parameters(request_fields: dict):
     if end_utc <= start_utc:
         return jsonify({"error": "endUtc must be after startUtc"})
 
-    # Duration must be between 5 minutes and 6 hours
+    # duration must be between 15 minutes and MAX_JOB_DURATION (default is 180 minutes / 3 hours)
+    max_duration = timedelta(minutes=int(os.getenv("MAX_JOB_DURATION", "180")))
+    max_hours = max_duration.total_seconds() / 3600
     duration = end_utc - start_utc
-    if duration < timedelta(minutes=5):
-        return jsonify({"error": "Timebox duration must be at least 5 minutes"})
-    if duration > timedelta(hours=6):
-        return jsonify({"error": "Timebox duration must not exceed 6 hours"})
+    if duration < timedelta(minutes=15):
+        return jsonify({"error": "Timebox duration must be at least 15 minutes"})
+    if duration > max_duration:
+        return jsonify({"error": f"Timebox duration must not exceed {max_hours:.0f} hours"})
 
     # endUtc must not be in the future
     if end_utc > now:

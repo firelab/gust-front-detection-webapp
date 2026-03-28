@@ -62,7 +62,7 @@ export default function App() {
       setjobId("");
       setNumFrames(0);
       setFrames([]);
-      const response = await fetch("/APIs/run", {
+      const response = await fetch("/apis/run", {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -88,7 +88,7 @@ useEffect(() => {
     console.log(`attempting to fetch ${numFrames} frames for job ${jobId}`);
     try {
       const promises = Array.from({ length: numFrames }, (_, i) =>
-        fetch(`/APIs/jobs/${jobId}/frames/${i}`)
+        fetch(`/apis/jobs/${jobId}/frames/${i}`)
           .then(res => {
             if (!res.ok) throw new Error(`Failed frame ${i}`);
             return res.blob();
@@ -105,10 +105,10 @@ useEffect(() => {
   fetchFrames();
 }, [jobStatus, jobId, numFrames]);
 
-  // fetch radar stations from backend at /APIs/stations
+  // fetch radar stations from backend at /apis/stations
   useEffect(() => {
     async function loadStations() {
-      const response = await fetch("/APIs/stations");
+      const response = await fetch("/apis/stations");
       const stationJson = await response.json();
       const nextStations = Array.isArray(stationJson?.features)
         ? stationJson.features
@@ -126,7 +126,7 @@ useEffect(() => {
     }
     const intervalId = setInterval(async () => {
       try {
-        const response = await fetch(`/APIs/status?job_id=${jobId}`);
+        const response = await fetch(`/apis/status?job_id=${jobId}`);
         const data = await response.json();
         console.log(data);
         setjobStatus(data.status);
