@@ -6,8 +6,7 @@ logger = logging.getLogger(__name__)
 
 
 class NfgdaService:
-    """High-level service that orchestrates a single NFGDA run, including
-    job lifecycle updates in Redis."""
+    """ high-level service that orchestrates a single NFGDA run, including job lifecycle updates in Redis. """
 
     def __init__(self, redis_client, job_id: str, job_fields: dict, out_dir: str) -> None:
         self.redis_client = redis_client
@@ -17,7 +16,7 @@ class NfgdaService:
         self.out_dir = out_dir
 
     async def run(self) -> None:
-        """Execute the NFGDA algorithm and update job status in Redis."""
+        """ execute the NFGDA algorithm and update job status in Redis. """
         try:
             self.redis_client.hset(self.job_key, mapping={"status": "PROCESSING"})
 
@@ -34,13 +33,15 @@ class NfgdaService:
             )
             success, message = await runner.run()
 
+            # update job status in redis
             if success:
-                logger.info("Algorithm processing for job %s completed successfully", self.job_id)
+                logger.info("algorithm processing for job %s completed successfully", self.job_id)
             else:
+                # no, this is patrick
                 self.redis_client.hset(self.job_key, mapping={"status": "FAILED", "error_message": message})
-                logger.warning("Job %s failed (runner returned falsy)", self.job_id)
-                logger.warning("Error message: %s", message)
+                logger.warning("job %s failed (runner returned falsy)", self.job_id)
+                logger.warning("error message: %s", message)
 
         except Exception as e:
             self.redis_client.hset(self.job_key, mapping={"status": "FAILED"})
-            logger.exception("Job %s failed with exception: %s", self.job_id, e)
+            logger.exception("job %s failed with exception: %s", self.job_id, e)
