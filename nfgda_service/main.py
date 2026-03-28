@@ -58,7 +58,6 @@ async def process_job(job_id: str) -> None:
     job_key = f"job:{job_id}"
     job_fields = redis_client.hgetall(job_key)
     out_dir = format_output_directory(job_id)
-    upate_redis_with_output_dir(job_id, out_dir)
 
     logger.info("processing job %s", job_id)
     service = NfgdaService(redis_client, job_id, job_fields, out_dir)
@@ -89,10 +88,6 @@ async def run_and_release_job(job_id: str) -> None:
     finally:
         # they took my jerb!
         job_semaphore.release()
-
-def upate_redis_with_output_dir(job_id: str, out_dir: str) -> None:
-    """Update Redis with the output directory for a job."""
-    redis_client.hset(f"job:{job_id}", "outputDir", out_dir)
 
 def format_output_directory(job_id: str) -> str:
     """Format the output directory for a job."""
