@@ -68,13 +68,14 @@ def send_job_to_redis_queue(redis_client, request_fields: dict):
 def validate_time_parameters(request_fields: dict):
     """Validate the time parameters recieved via the request."""
     
-    # Default timebox when not provided: look back 15 minutes from now
-    # so the algorithm captures 2-3 recent NEXRAD scans for detection + forecast
-    # (2 scan minimum needed for forcasting)
+    # Default timebox when not provided: look back over the last ~25 minutes, ending
+    # 10 minutes ago. The 10-minute buffer ensures the algorithm's end time is always
+    # fully in the past — if endUtc is too close to "now" the algorithm enters live
+    # polling mode and runs indefinitely.
     now = datetime.now(timezone.utc)
     if not request_fields.get("startUtc") and not request_fields.get("endUtc"):
-        request_fields["startUtc"] = (now - timedelta(minutes=15)).strftime("%Y-%m-%dT%H:%M:%SZ")
-        request_fields["endUtc"] = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+        request_fields["startUtc"] = (now - timedelta(minutes=35)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        request_fields["endUtc"] = (now - timedelta(minutes=10)).strftime("%Y-%m-%dT%H:%M:%SZ")
     elif not request_fields.get("startUtc") or not request_fields.get("endUtc"):
         return jsonify({"error": "Must provide both startUtc and endUtc, or neither"})
 
@@ -102,8 +103,10 @@ def validate_time_parameters(request_fields: dict):
     if duration > max_duration:
         return jsonify({"error": f"Timebox duration must not exceed {max_hours:.0f} hours"})
 
-    # endUtc must not be in the future
-    if end_utc > now:
-        return jsonify({"error": "endUtc must not be later than the current time"})
+    # endUtc must be at least 5 minutes in the past — the algorithm enters a live
+    # polling loop if endUtc is too close to the current time, causing jobs to run
+    # indefinitely instead of processing a closed historical window.
+    if end_utc > now - timedelta(minutes=5):
+        return jsonify({"error": "endUtc must be at least 5 minutes in the past"})
 
     return None

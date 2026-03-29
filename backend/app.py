@@ -1,10 +1,9 @@
-import os
 import redis
-from flask import Flask, jsonify, request, send_file, abort
+from flask import Flask, jsonify, request
 from apis.stations import list_stations_api
 from apis.run_request import send_job_to_redis_queue
 from apis.status import get_job_status
-from apis.retrieve_frames import get_frames
+from apis.retrieve_frames import get_frame
 
 app = Flask(__name__)
 
@@ -38,22 +37,9 @@ def run_endpoint():
 
 # Frame Data API
 @app.route("/apis/jobs/<job_id>/frames/<int:index>", methods=["GET"])
-def get_frame(job_id, index):
+def get_frame_endpoint(job_id, index):
     """Takes job ID and frame index, returns a single GeoTIFF file."""
-    
-    job_dir = "/processed_data/" + job_id
-    if not os.path.exists(job_dir):
-        abort(404, description="Job not found")
-
-    frame_path = job_dir + f"/frame_{index}.tif"
-    if not os.path.exists(frame_path):
-        abort(404, description="Frame not found")
-
-    return send_file(
-        frame_path,
-        mimetype="image/tiff",
-        as_attachment=False
-    )
+    return get_frame(job_id, index)
 
 
 # Job Status API

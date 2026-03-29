@@ -3,7 +3,6 @@
 import argparse
 import numpy as np
 from osgeo import gdal, osr
-import math
 
 # ---------------------------
 # Command line inputs

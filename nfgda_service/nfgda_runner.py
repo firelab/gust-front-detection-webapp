@@ -64,7 +64,7 @@ class NfgdaRunner:
 
             # asyncio manages the wait from the spawned algorithm subprocess(es)
             proc = await asyncio.create_subprocess_exec(
-                "python", "-u", "/app/scripts/NFGDA_Host.py",
+                "python", "-u", "/app/algorithm/scripts/NFGDA_Host.py",
                 env=env,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
@@ -134,7 +134,7 @@ class NfgdaRunner:
         """ create a temporary NFGDA config file. Returns the path to the file."""
 
         # brief check against the config file shipped w/ the original algo for SnG
-        if not os.path.exists("/app/scripts/NFGDA.ini"):
+        if not os.path.exists("/app/algorithm/scripts/NFGDA.ini"):
             logger.warning("NFGDA.ini default config not found (proceeding anyway)")
 
         csv_start = self.iso_to_csv_time(self.start_utc)
@@ -180,6 +180,8 @@ class NfgdaRunner:
             no_data_polls: Kill the process after this many consecutive
                                "no new scans found" messages.
         """
+
+        no_data_polls = int(os.getenv("MAX_NO_DATA_POLLS", "10"))
 
         # read the log stream lines and check for patterns that indicate error
         while True:
