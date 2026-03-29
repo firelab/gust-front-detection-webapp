@@ -28,6 +28,7 @@ Backend directory structure:
 NFGDA Service directory structure:
 
 - /nfgda_service contains the NFGDA service logic
+- /nfgda_service/algorithm contains the original NFGDA code and script with some slight tweaks
 - responsible for all NFGDA execution, output processing, and file management
 
 And then there's a redis instance living at port 6379 where all the job status and asset information is stored.
@@ -45,7 +46,6 @@ And then there's a redis instance living at port 6379 where all the job status a
 - [ ] Make some stuff environment variables instead of random variables everywhere
 - [ ] Discuss pixel-width of gust fronts written to output file next team meeting
 - [ ] Diff the NFGDA code used in nfgda_service with the original NFGDA code, see if there are any useful features we're missing out on or bugs we introduced
-- [ ] Backend code cleanup / add comments where necessary
 
 # "Nice to have" features
 
