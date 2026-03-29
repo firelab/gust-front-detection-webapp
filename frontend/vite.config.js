@@ -7,7 +7,7 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     proxy: {
-      "/APIs": "http://backend:8001", //backend to work with docker, localhost w/o
+      "/apis": "http://backend:8001", //backend to work with docker, localhost w/o
     },
   },
 });

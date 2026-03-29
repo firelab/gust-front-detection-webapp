@@ -23,4 +23,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . /app
 
+# algorithm modules (nfgda/, python/, scripts/) now live under /app/algorithm
+ENV PYTHONPATH="/app/algorithm"
+
 CMD ["python", "main.py"]

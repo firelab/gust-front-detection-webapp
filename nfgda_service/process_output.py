@@ -252,13 +252,13 @@ def project_data(npz_path: str, radar_lat: float, radar_lon: float, out_dir: str
     )
 
     # ---------------------------
-    # Write final GeoTIFF
+    # Write final Cloud-Optimized GeoTIFF
     # ---------------------------
-    driver = gdal.GetDriverByName("GTiff")
+    driver = gdal.GetDriverByName("COG")
     driver.CreateCopy(
         final_tif,
         warped_ds,
-        options=["COMPRESS=DEFLATE", "TILED=YES"]
+        options=["COMPRESS=DEFLATE", "OVERVIEWS=IGNORE_EXISTING"]
     )
 
     warped_ds = None
