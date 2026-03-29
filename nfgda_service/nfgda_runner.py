@@ -55,7 +55,7 @@ class NfgdaRunner:
             return False, "Failed to create config file"
 
         logger.info("running algorithm for job %s", self.job_id)
-        state = {"no_data_count": 0, "fatal_error_count": 0}
+        state = {"no_data_count": 0, "fatal_error_count": 0, "clean_shutdown": False}
 
         try:
             # build an env dict with the per-job config path
@@ -98,11 +98,21 @@ class NfgdaRunner:
 
             # check if the algorithm exited with a non-zero return code
             if proc.returncode != 0:
-                logger.error(
-                    "NFGDA algorithm exited with code %d",
-                    proc.returncode,
-                )
-                return False, f"an error occurred processing the algorithm. Error code: {proc.returncode}"
+                if state["clean_shutdown"] and state["fatal_error_count"] == 0:
+                    # the algorithm completed its work but the process exited
+                    # non-zero due to a benign Python shutdown error (e.g. the
+                    # ProcessPoolExecutor "Bad file descriptor" race condition).
+                    # treat this as a success so the pipeline can continue.
+                    logger.warning(
+                        "NFGDA algorithm exited with code %d but reported a clean shutdown — treating as success",
+                        proc.returncode,
+                    )
+                else:
+                    logger.error(
+                        "NFGDA algorithm exited with code %d",
+                        proc.returncode,
+                    )
+                    return False, f"an error occurred processing the algorithm. Error code: {proc.returncode}"
 
             # check if fatal errors were logged during processing
             if state["fatal_error_count"] > 0:
@@ -203,6 +213,9 @@ class NfgdaRunner:
                         return
                 elif "new volume" in text:
                     state["no_data_count"] = 0
+
+                if "shutdown complete" in text:
+                    state["clean_shutdown"] = True
 
                 if "fatal error" in text.lower():
                     state["fatal_error_count"] += 1

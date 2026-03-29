@@ -296,11 +296,11 @@ class HostDaemon:
 
         # await asyncio.gather(*self._tasks, return_exceptions=True),
 
-        logger.info("shutting down process pools (wait=False)")
-        self.dl_pool.shutdown(wait=False)
-        self.ng_pool.shutdown(wait=False)
-        self.df_pool.shutdown(wait=False)
-        self.sf_pool.shutdown(wait=False)
+        logger.info("shutting down process pools")
+        self.dl_pool.shutdown(wait=True, cancel_futures=True)
+        self.ng_pool.shutdown(wait=True, cancel_futures=True)
+        self.df_pool.shutdown(wait=True, cancel_futures=True)
+        self.sf_pool.shutdown(wait=True, cancel_futures=True)
         logger.info("shutdown complete")
 
     async def delay_shutdown(self, timeout=3600):
