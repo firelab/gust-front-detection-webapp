@@ -57,7 +57,7 @@ export default function App() {
         requestBody.endUtc = dayjs().subtract(25, 'minute').utc().format("YYYY-MM-DDTHH:mm:ss[Z]")
       }
       // ---- make request ----
-      setjobStatus("NONE");
+      setjobStatus("REQUESTED");
       setErrorMessage("");
       setjobId("");
       setNumFrames(0);
@@ -179,7 +179,7 @@ useEffect(() => {
 
   return (
     <Container maxWidth="md">
-        <div className='mt-20 gap-4 flex items-end'>
+        <div className='mt-20 gap-4 flex flex-col md:flex-row md:items-end'>
           {/* Station Selector */}
           <div className='flex-1'>
             <RadarStationDropdown
@@ -230,14 +230,15 @@ useEffect(() => {
           </div>
           {/* Fetch Button */}
           <Button
-            className="w-[20%] h-14" 
+            className="md:w-[20%] h-14" 
             onClick={fetchRadarData}
             variant="contained">
               Get Radar Data
           </Button>
         </div>
-        {jobId && <p>Job ID: {jobId}</p>}
-        <p>Job Status: {jobStatus}</p>
+        {jobStatus === "PROCESSING" && <p>The radar data is being processed. This usually takes a couple minutes.</p>}
+        {jobStatus === "REQUESTED" && <p>The radar data has been requested. Please wait.</p>}
+        
         <p className='text-red-800 font-bold'>{errorMessage}</p>
 
         <div className="flex w-full mt-20 mb-2 items-center px-4">
