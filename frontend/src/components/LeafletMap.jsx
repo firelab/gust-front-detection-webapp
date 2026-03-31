@@ -4,7 +4,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
-import GeotiffLayer from './GeoTiffLayer'
+import GeoTiffAnimation from './GeoTiffAnimation'
 
 
 function DisplayPosition({ map, mapLatLng, setMapLatLng }) {
@@ -95,14 +95,10 @@ export default function LeafletMap({
           </Marker>
         )
       })}
-          {frames.map((url, index) => (
-             <GeotiffLayer 
-             key={url} 
-             frame={url} 
-             isVisible={index === currentFrameIndex} 
-             />
-             ))}
-           
+      <GeoTiffAnimation
+        frames={frames}
+        currentIndex={currentFrameIndex}
+      />                
       </MapContainer>
     </div>
   )
