@@ -22,7 +22,7 @@ export default function App() {
   const [timezone, setTimezone] = useState(dayjs.tz.guess());
 
   // API State
-  const [jobStatus, setjobStatus] = useState("NONE");
+  const [jobStatus, setJobStatus] = useState("NONE");
   const [jobId, setjobId] = useState("");
   const [numFrames, setNumFrames] = useState(0);
   const [frames, setFrames] = useState([]);
@@ -40,8 +40,10 @@ export default function App() {
     try {
       // ---- validate request ----
       if (!selectedStation?.properties?.station_id) {
-        throw new Error("No station selected");
+        setErrorMessage("Please select a radar station first.");
+        return;
       }
+      setErrorMessage("");
       const requestBody = {
           stationId: selectedStation.properties.station_id
       };
@@ -56,12 +58,14 @@ export default function App() {
         requestBody.startUtc = dayjs().subtract(45, 'minute').utc().format("YYYY-MM-DDTHH:mm:ss[Z]")
         requestBody.endUtc = dayjs().subtract(25, 'minute').utc().format("YYYY-MM-DDTHH:mm:ss[Z]")
       }
-      // ---- make request ----
-      setjobStatus("REQUESTED");
-      setErrorMessage("");
+
+      // ---- reset state ----
+      setJobStatus("REQUESTED");
       setjobId("");
       setNumFrames(0);
       setFrames([]);
+
+      // ---- make request ----
       const response = await fetch("/apis/run", {
         method: 'POST',
         headers: {
@@ -70,14 +74,24 @@ export default function App() {
         },
         body: JSON.stringify(requestBody)
       });
+
+      // ---- Handle Errors ----
       if (!response.ok) {
-        throw new Error(`Request failed with status ${response.status}`);
+        const errorData = await response.json().catch(() => ({})); 
+        const errorMsg = errorData.error || errorData.message || `Error ${response.status}: ${response.statusText}`;
+        setErrorMessage(errorMsg);
+        setJobStatus("FAILED");
+        throw new Error(errorMsg); // This sends the message to the catch block
       }
+      
       const data = await response.json();
-      console.log(data)
       setjobId(data.job_id);
     } catch (err) {
-      console.error(err)
+      console.error("Fetch Error:", err);
+      setJobStatus("FAILED");
+      if (!errorMessage) {
+        setErrorMessage("A network error occurred. Please try again.");
+      }
     }
   };
 
@@ -129,9 +143,11 @@ useEffect(() => {
         const response = await fetch(`/apis/status?job_id=${jobId}`);
         const data = await response.json();
         console.log(data);
-        setjobStatus(data.status);
-        if (data.error_message){
+        setJobStatus(data.status);
+        if (data.error){
           setErrorMessage(data.error_message);
+          console.log("here");
+          
         } else {
           setErrorMessage("");
         }
@@ -238,8 +254,7 @@ useEffect(() => {
         </div>
         {jobStatus === "PROCESSING" && <p>The radar data is being processed. This usually takes a couple minutes.</p>}
         {jobStatus === "REQUESTED" && <p>The radar data has been requested. Please wait.</p>}
-        
-        <p className='text-red-800 font-bold'>{errorMessage}</p>
+        {errorMessage&& <p className='font-bold'>{errorMessage}</p>}
 
         <div className="flex w-full mt-20 mb-2 items-center px-4">
           <button 
