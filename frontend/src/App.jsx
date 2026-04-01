@@ -12,6 +12,7 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
 import { Slider, Button, Select, MenuItem, FormControl, InputLabel, Checkbox } from '@mui/material';
 
+
 export default function App() {
 
   // User Selection State
@@ -32,6 +33,9 @@ export default function App() {
   const [currentFrameIndex, setCurrentFrameIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const playbackRef = useRef(null);
+
+  // Endpoint for Server Deployment
+  const API_BASE = "/gust-front-detection/apis";
   
   // --------------------------------------- HANDLERS ----------------------------------------
 
@@ -62,7 +66,7 @@ export default function App() {
       setjobId("");
       setNumFrames(0);
       setFrames([]);
-      const response = await fetch("/apis/run", {
+      const response = await fetch(`${API_BASE}/run`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -88,7 +92,7 @@ useEffect(() => {
     console.log(`attempting to fetch ${numFrames} frames for job ${jobId}`);
     try {
       const promises = Array.from({ length: numFrames }, (_, i) =>
-        fetch(`/apis/jobs/${jobId}/frames/${i}`)
+        fetch(`${API_BASE}/jobs/${jobId}/frames/${i}`)
           .then(res => {
             if (!res.ok) throw new Error(`Failed frame ${i}`);
             return res.blob();
@@ -108,7 +112,7 @@ useEffect(() => {
   // fetch radar stations from backend at /apis/stations
   useEffect(() => {
     async function loadStations() {
-      const response = await fetch("/apis/stations");
+      const response = await fetch(`${API_BASE}/stations`);
       const stationJson = await response.json();
       const nextStations = Array.isArray(stationJson?.features)
         ? stationJson.features
@@ -126,7 +130,7 @@ useEffect(() => {
     }
     const intervalId = setInterval(async () => {
       try {
-        const response = await fetch(`/apis/status?job_id=${jobId}`);
+        const response = await fetch(`${API_BASE}/status?job_id=${jobId}`);
         const data = await response.json();
         console.log(data);
         setjobStatus(data.status);

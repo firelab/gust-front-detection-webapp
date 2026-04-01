@@ -8,7 +8,7 @@ from apis.retrieve_frames import get_frame
 app = Flask(__name__)
 
 # Connect to the Redis container
-redis_client = redis.Redis(host='redis', port=6379, db=0, decode_responses=True)
+redis_client = redis.Redis(host='10.88.0.14', port=6379, db=0, decode_responses=True)
 
 # Station List API
 @app.route("/apis/stations", methods=["GET"])
