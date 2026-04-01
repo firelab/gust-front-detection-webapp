@@ -1,14 +1,16 @@
-
 FROM node:20
-#set working directory inside container
 WORKDIR /app
-#copy requirements 
+
+# Copy and install dependencies
 COPY package*.json ./
-#install dependancies
 RUN npm install
-#copy front end into container
+
+# Copy source and build
 COPY . .
-#Expose port 5173
+RUN npm run build
+
+# Install a simple static server
+RUN npm install -g serve
+
 EXPOSE 5173
-#command to run webpage
-CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+CMD ["serve", "-s", "dist", "-l", "5173"]
