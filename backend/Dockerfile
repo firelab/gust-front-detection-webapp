@@ -14,5 +14,8 @@ COPY . .
 # Expose port 8001
 EXPOSE 8001
 
-# Command to run the Flask application
-CMD ["python", "app.py"]
+# Install gunicorn
+RUN pip install gunicorn
+
+# Use gunicorn to run the app
+CMD ["gunicorn", "--bind", "0.0.0.0:8001", "app:app", "--workers", "4"]
