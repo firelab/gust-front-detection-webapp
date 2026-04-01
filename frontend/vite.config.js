@@ -7,8 +7,12 @@ export default defineConfig({
   base: '/gust-front-detection/',
   plugins: [react(), tailwindcss()],
   server: {
+    host: '0.0.0.0',
+    port: 5173,
+    strictPort: true,
+    origin: 'https://ninjastorm.firelab.org/gust-front-detection',
     proxy: {
-      "/apis": "http://backend:8001", //backend to work with docker, localhost w/o
+      '/apis': 'http://backend:8001',
     },
   },
 });
