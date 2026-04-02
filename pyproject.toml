@@ -1,5 +1,11 @@
 [tool.ruff]
 line-length = 88
 exclude = [
-    "backend/src/nfgda_service/nfgda_algorithm",
+    "nfgda_service/algorithm",
+    "backend/src/nfgda_service",
+]
+
+[tool.pytest.ini_options]
+markers = [
+    "slow: marks tests that poll for job completion (deselect with '-m \"not slow\"')",
 ]

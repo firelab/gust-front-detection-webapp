@@ -6,14 +6,12 @@ from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
-MAX_NO_DATA_POLLS = int(os.getenv("MAX_NO_DATA_POLLS", "10"))
-
 class NfgdaRunner:
-    """Executes the NFGDA algorithm for a given run request."""
+    """ executes the NFGDA algorithm for a given run request. """
 
     def __init__(self, station_id: str, start_utc: str, end_utc: str, job_id: str, out_dir: str) -> None:
         """
-        Initialize the NfgdaRunner with the given parameters.
+        initialize the NfgdaRunner with the given parameters.
 
         Args:
             station_id (str): The station code.
@@ -42,42 +40,47 @@ class NfgdaRunner:
         Returns:
             bool: True if the NFGDA process completed successfully, False otherwise.
         """
-        
+
+        # get the number of consecutive no data polls to allow before killing the process
+        no_data_polls = int(os.getenv("MAX_NO_DATA_POLLS", "10"))
+
         logger.info(f"timebox parameters set to start_utc: {self.start_utc}, end_utc: {self.end_utc}")
         
+        # create a temporary config file for the algorithm
         config_path = self.create_temp_config(self.out_dir)
         logger.info("setting environment variable NFGDA_CONFIG_PATH to %s", config_path)
         
+        # if the config file couldn't be created for some reason return False
         if config_path is None:
             return False, "Failed to create config file"
 
         logger.info("running algorithm for job %s", self.job_id)
-        state = {"no_data_count": 0, "fatal_error_count": 0}
+        state = {"no_data_count": 0, "fatal_error_count": 0, "clean_shutdown": False}
 
         try:
-            # Build an env dict with the per-job config path
+            # build an env dict with the per-job config path
             env = os.environ.copy()
             env["NFGDA_CONFIG_PATH"] = config_path
 
             # asyncio manages the wait from the spawned algorithm subprocess(es)
             proc = await asyncio.create_subprocess_exec(
-                "python", "-u", "/app/scripts/NFGDA_Host.py",
+                "python", "-u", "/app/algorithm/scripts/NFGDA_Host.py",
                 env=env,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
 
-            # Stream stdout and stderr from algorithm subprocesses line-by-line in real time
+            # stream stdout and stderr from algorithm subprocesses line-by-line in real time
             stream_tasks = [
                 asyncio.create_task(self.stream_pipe(proc.stdout, "stdout")),
                 asyncio.create_task(self.monitored_stream(proc.stderr, "stderr", proc, state)),
             ]
 
-            # Wait for the algorithm to complete, with a timeout
+            # wait for the algorithm to complete, with a timeout
             try:
                 await asyncio.wait_for(proc.wait(), timeout=self.algo_timeout_seconds)
             except asyncio.TimeoutError:
-                logger.error("NFGDA algorithm timed out — killing process")
+                logger.error("NFGDA algorithm timed out. Killing process")
                 proc.kill()
                 await proc.wait()
                 return False, "NFGDA algorithm timed out"
@@ -85,23 +88,33 @@ class NfgdaRunner:
                 # flush remaining buffered output
                 await asyncio.gather(*stream_tasks)
 
-            # Check if the algorithm was killed due to a data gap
-            if state["no_data_count"] >= MAX_NO_DATA_POLLS:
+            # check if the algorithm was killed due to a lack of data in the nexrad S3 bucket
+            if state["no_data_count"] >= no_data_polls:
                 logger.error(
-                    "NFGDA process killed due to data gap — no scans found after %d consecutive polls",
-                    MAX_NO_DATA_POLLS,
+                    "NFGDA process killed due to data gap. No scans found after %d consecutive polls",
+                    no_data_polls,
                 )
-                return False, f"No radar data found after {MAX_NO_DATA_POLLS} polls"
+                return False, f"No radar data found after {no_data_polls} polls"
 
-            # Check if the algorithm exited with a non-zero return code
+            # check if the algorithm exited with a non-zero return code
             if proc.returncode != 0:
-                logger.error(
-                    "NFGDA algorithm exited with code %d",
-                    proc.returncode,
-                )
-                return False, f"an error occurred processing the algorithm. Error code: {proc.returncode}"
+                if state["clean_shutdown"] and state["fatal_error_count"] == 0:
+                    # the algorithm completed its work but the process exited
+                    # non-zero due to a benign Python shutdown error (e.g. the
+                    # ProcessPoolExecutor "Bad file descriptor" race condition).
+                    # treat this as a success so the pipeline can continue.
+                    logger.warning(
+                        "NFGDA algorithm exited with code %d but reported a clean shutdown — treating as success",
+                        proc.returncode,
+                    )
+                else:
+                    logger.error(
+                        "NFGDA algorithm exited with code %d",
+                        proc.returncode,
+                    )
+                    return False, f"an error occurred processing the algorithm. Error code: {proc.returncode}"
 
-            # Check if fatal errors were logged during processing
+            # check if fatal errors were logged during processing
             if state["fatal_error_count"] > 0:
                 logger.error(
                     "NFGDA algorithm reported %d fatal error(s) during processing",
@@ -118,16 +131,20 @@ class NfgdaRunner:
 
     @staticmethod
     def iso_to_csv_time(iso_str: str) -> str:
-        """Convert an ISO 8601 timestamp (e.g. '2024-07-07T01:22:24Z') to the
+        """ convert an ISO 8601 timestamp (e.g. '2024-07-07T01:22:24Z') to the
         comma-separated format that NFGDA config asks for (e.g. 'year,month,day,hour,minute,second').
+
+        Why tf did they format their timestamps like this???
         """
-        dt = datetime.strptime(iso_str, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
-        return f"{dt.year},{dt.month},{dt.day},{dt.hour},{dt.minute},{dt.second}"
+        # convert the iso string to a datetime object
+        date_time = datetime.strptime(iso_str, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+        return f"{date_time.year},{date_time.month},{date_time.day},{date_time.hour},{date_time.minute},{date_time.second}"
 
     def create_temp_config(self, out_dir: str) -> str:
-        """Create a temporary NFGDA config file. Returns the path to the file."""
+        """ create a temporary NFGDA config file. Returns the path to the file."""
 
-        if not os.path.exists("/app/scripts/NFGDA.ini"):
+        # brief check against the config file shipped w/ the original algo for SnG
+        if not os.path.exists("/app/algorithm/scripts/NFGDA.ini"):
             logger.warning("NFGDA.ini default config not found (proceeding anyway)")
 
         csv_start = self.iso_to_csv_time(self.start_utc)
@@ -135,6 +152,7 @@ class NfgdaRunner:
         logger.info("config times: start=%s -> %s, end=%s -> %s",
                      self.start_utc, csv_start, self.end_utc, csv_end)
 
+        # write the config file out
         with tempfile.NamedTemporaryFile("w", delete=False, suffix=".ini", prefix="nfgda_") as f:
             f.write(f"""[Settings]
                 radar_id = {self.station_id}
@@ -165,13 +183,17 @@ class NfgdaRunner:
 
     @staticmethod
     async def monitored_stream(stream, label: str, proc, state: dict):
-        """Read lines and, for stderr, count consecutive no-data polls.
+        """ read logs, monitor for no data and fatal errors. Kill wonky processes
 
         Args:
             stream: asyncio subprocess stream (stdout or stderr).
-            MAX_NO_DATA_POLLS: Kill the process after this many consecutive
+            no_data_polls: Kill the process after this many consecutive
                                "no new scans found" messages.
         """
+
+        no_data_polls = int(os.getenv("MAX_NO_DATA_POLLS", "10"))
+
+        # read the log stream lines and check for patterns that indicate error
         while True:
             line = await stream.readline()
             if not line:
@@ -180,17 +202,20 @@ class NfgdaRunner:
             logger.info("[NFGDA_Host %s] %s", label, text)
 
             if label == "stderr":
-                if "no new scans found" in text:
+                if "no new scans found" in text:        
                     state["no_data_count"] += 1
-                    if state["no_data_count"] >= MAX_NO_DATA_POLLS:
+                    if state["no_data_count"] >= no_data_polls:
                         logger.error(
-                            "no data found after %d consecutive polls — killing process",
+                            "no data found after %d consecutive polls. Killing process",
                             state["no_data_count"],
                         )
                         proc.kill()
                         return
                 elif "new volume" in text:
                     state["no_data_count"] = 0
+
+                if "shutdown complete" in text:
+                    state["clean_shutdown"] = True
 
                 if "fatal error" in text.lower():
                     state["fatal_error_count"] += 1

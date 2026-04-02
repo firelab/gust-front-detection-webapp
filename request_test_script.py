@@ -2,10 +2,10 @@
 """
 End-to-end integration test:
 
-1. GET /APIs/stations  → fetch the station list
+1. GET /apis/stations  → fetch the station list
 2. Randomly select one station
-3. POST /APIs/run      → submit a job for that station
-4. Poll GET /APIs/status until the job reaches COMPLETED (or FAILED)
+3. POST /apis/run      → submit a job for that station
+4. Poll GET /apis/status until the job reaches COMPLETED (or FAILED)
 5. GET /api/jobs/<job_id>/frames/<index> → fetch every produced frame
 """
 
@@ -29,8 +29,8 @@ def main():
 
     # ── 1. Fetch station list ────────────────────────────────────────
     print(f"\n{'='*60}")
-    print("Step 1: GET /APIs/stations")
-    resp = requests.get(f"{BASE_URL}/APIs/stations")
+    print("Step 1: GET /apis/stations")
+    resp = requests.get(f"{BASE_URL}/apis/stations")
     print(f"  status: {resp.status_code}")
     if resp.status_code != 200:
         print(f"  FAILED — {resp.text[:200]}")
@@ -55,10 +55,10 @@ def main():
     }
 
     print(f"\n{'='*60}")
-    print("Step 3: POST /APIs/run")
+    print("Step 3: POST /apis/run")
     print(f"  payload: {json.dumps(payload, indent=2)}")
 
-    resp = requests.post(f"{BASE_URL}/APIs/run", json=payload)
+    resp = requests.post(f"{BASE_URL}/apis/run", json=payload)
     body = resp.json()
     print(f"  status:   {resp.status_code}")
     print(f"  response: {json.dumps(body, indent=2)}")
@@ -81,7 +81,7 @@ def main():
         time.sleep(5)
         print(f"\n  --- Poll #{poll} ---")
 
-        resp = requests.get(f"{BASE_URL}/APIs/status", params={"job_id": job_id})
+        resp = requests.get(f"{BASE_URL}/apis/status", params={"job_id": job_id})
         try:
             status_body = resp.json()
         except requests.exceptions.JSONDecodeError:
@@ -108,7 +108,7 @@ def main():
     print(f"Step 5: Fetching {num_frames} frame(s) for job {job_id}")
 
     for index in range(num_frames):
-        url = f"{BASE_URL}/APIs/jobs/{job_id}/frames/{index}"
+        url = f"{BASE_URL}/apis/jobs/{job_id}/frames/{index}"
         print(f"\n  GET {url}")
         resp = requests.get(url)
         if resp.status_code == 200:

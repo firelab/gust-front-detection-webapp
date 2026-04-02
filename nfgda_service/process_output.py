@@ -127,7 +127,7 @@ def _reflectivity_to_rgba(refl: np.ndarray, nfout: np.ndarray) -> np.ndarray:
     # Map valid reflectivity through the colormap
     normalized = _nexrad_norm(refl[valid])                 # int bin indices
     mapped = (_nexrad_cmap(normalized) * 255).astype(np.uint8)  # (N, 4) RGBA
-    mapped[:, 3] = 102  # 40% opacity for radar pixels
+    mapped[:, 3] = 255  # 100% opacity for radar pixels
 
     rgba[valid] = mapped
 
@@ -252,13 +252,13 @@ def project_data(npz_path: str, radar_lat: float, radar_lon: float, out_dir: str
     )
 
     # ---------------------------
-    # Write final GeoTIFF
+    # Write final Cloud-Optimized GeoTIFF
     # ---------------------------
-    driver = gdal.GetDriverByName("GTiff")
+    driver = gdal.GetDriverByName("COG")
     driver.CreateCopy(
         final_tif,
         warped_ds,
-        options=["COMPRESS=DEFLATE", "TILED=YES"]
+        options=["COMPRESS=DEFLATE", "OVERVIEWS=IGNORE_EXISTING"]
     )
 
     warped_ds = None
