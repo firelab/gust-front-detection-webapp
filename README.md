@@ -55,6 +55,14 @@ And then there's a redis instance living at port 6379 where all the job status a
 - Serve tiles instead of individual GeoTIFFs (big refactor, honestly might not be worth at as Cloud-optimized-geotiffs are kinda the future anyway)
 - Hash job IDs to make them unguessable, so resources can't be directly accessed via URL (little development effort, likely med/large refactor effort)
 
+
+# License
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+Copyright (c) 2026 ROCKY MOUNTAIN RESEARCH STATION (RMRS)
+MISSOULA FIRE SCIENCES LABORATORY
+
+  
 ### Todo after MSU handoff (futures devs read this pls)
 
 - Check that automatic asset deletion occurs within the timeframe specified (should be 24 hours)
