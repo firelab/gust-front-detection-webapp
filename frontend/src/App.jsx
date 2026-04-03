@@ -28,6 +28,7 @@ export default function App() {
     dayjs().tz(dayjs.tz.guess()),
   );
   const [timezone, setTimezone] = useState(dayjs.tz.guess());
+  const [selectedDuration, setSelectedDuration] = useState("60");
 
   // API State
   const [jobStatus, setJobStatus] = useState("NONE");
@@ -52,28 +53,27 @@ export default function App() {
         return;
       }
       setErrorMessage("");
+      const durationMinutes = Number(selectedDuration);
       const requestBody = {
         stationId: selectedStation.properties.station_id,
       };
       if (!currentMode) {
         console.log("using historical data");
-        // if not fetching current data the end time requested is t+30 minutes
         requestBody.startUtc = selectedDateTime
           .utc()
           .format("YYYY-MM-DDTHH:mm:ss[Z]");
         requestBody.endUtc = selectedDateTime
-          .add(30, "minute")
+          .add(durationMinutes, "minute")
           .utc()
           .format("YYYY-MM-DDTHH:mm:ss[Z]");
       } else {
-        // currently using the same timebox as the default in run_request.py when no timebox is provided
         console.log("using current data");
         requestBody.startUtc = dayjs()
-          .subtract(45, "minute")
+          .subtract(durationMinutes + 15, "minute")
           .utc()
           .format("YYYY-MM-DDTHH:mm:ss[Z]");
         requestBody.endUtc = dayjs()
-          .subtract(25, "minute")
+          .subtract(15, "minute")
           .utc()
           .format("YYYY-MM-DDTHH:mm:ss[Z]");
       }
@@ -198,7 +198,7 @@ export default function App() {
     if (isPlaying) {
       playbackRef.current = setInterval(() => {
         setCurrentFrameIndex((prev) => (prev + 1) % frames.length);
-      }, 750);
+      }, 300);
     } else {
       clearInterval(playbackRef.current);
     }
@@ -207,7 +207,7 @@ export default function App() {
   }, [isPlaying, frames.length]);
 
   // Handle Slider Change
-  const handleSliderChange = (newValue) => {
+  const handleSliderChange = (event, newValue) => {
     setIsPlaying(false);
     setCurrentFrameIndex(newValue);
   };
@@ -215,110 +215,131 @@ export default function App() {
   // ---------------------------------------- JSX ----------------------------------------
 
   return (
-    <Container maxWidth="md">
-      <div className="mt-20 gap-4 flex flex-col md:flex-row md:items-end">
-        {/* Station Selector */}
-        <div className="flex-1">
+    <div>
+      <div className="flex flex-col md:flex-row w-full">
+        <div className="md:mt-12 p-4 gap-4 min-w-92 flex flex-col">
+          {/* Station Selector */}
           <RadarStationDropdown
             stations={stations}
             selectedStation={selectedStation}
             setSelectedStation={setSelectedStation}
           />
-        </div>
-        <div className="flex flex-col">
-          <div className="flex items-center">
-            <Checkbox
-              checked={currentMode}
-              onChange={() => {
-                setCurrentMode(!currentMode);
-              }}
-            ></Checkbox>
-            <p>Use Current Data</p>
-          </div>
-          <div>
-            {/* Timezone Selector */}
-            <FormControl>
-              <InputLabel>Timezone</InputLabel>
-              <Select
-                disabled={currentMode}
-                value={timezone}
-                className="min-w-24 mr-1"
-                label="Timezone"
-                onChange={handleTimezoneChange}
+          <div className="flex flex-col bg-white">
+            <div className="flex items-center">
+              <Checkbox
+                checked={currentMode}
+                onChange={() => {
+                  setCurrentMode(!currentMode);
+                }}
+              ></Checkbox>
+              <label
+                className="mouse-pointer"
+                onClick={() => {
+                  setCurrentMode(!currentMode);
+                }}
               >
-                <MenuItem value="UTC">UTC</MenuItem>
-                <MenuItem value="America/Anchorage">Alaska</MenuItem>
-                <MenuItem value="America/Los_Angeles">Pacific</MenuItem>
-                <MenuItem value="America/Denver">Mountain</MenuItem>
-                <MenuItem value="America/Chicago">Central</MenuItem>
-                <MenuItem value="America/New_York">Eastern</MenuItem>
-              </Select>
-            </FormControl>
-            {/* Date Time Selector */}
-            <LocalizationProvider dateAdapter={AdapterDayjs}>
-              <DateTimePicker
-                disabled={currentMode}
-                views={["year", "month", "day", "hours", "minutes"]}
-                ampm={false}
-                label="Radar Data Start Time"
-                value={selectedDateTime}
-                onChange={(newValue) =>
-                  setSelectedDateTime(dayjs(newValue).tz(timezone))
-                }
-                defaultValue={dayjs("2026-03-11T15:00")}
-                className="flex-1"
-              />
-            </LocalizationProvider>
+                Get latest radar data
+              </label>
+            </div>
+            <div>
+              <FormControl>
+                <InputLabel>Duration</InputLabel>
+                <Select
+                  label="Duration"
+                  className="mr-1 mb-2"
+                  value={selectedDuration}
+                  onChange={(e) => setSelectedDuration(e.target.value)}
+                >
+                  <MenuItem value="30">30 minutes</MenuItem>
+                  <MenuItem value="60">1 hour</MenuItem>
+                  <MenuItem value="120">2 hours</MenuItem>
+                </Select>
+              </FormControl>
+              {/* Timezone Selector */}
+              <FormControl>
+                <InputLabel>Timezone</InputLabel>
+                <Select
+                  disabled={currentMode}
+                  value={timezone}
+                  className="mr-1"
+                  label="Timezone"
+                  onChange={handleTimezoneChange}
+                >
+                  <MenuItem value="UTC">UTC</MenuItem>
+                  <MenuItem value="America/Anchorage">Alaska</MenuItem>
+                  <MenuItem value="America/Los_Angeles">Pacific</MenuItem>
+                  <MenuItem value="America/Denver">Mountain</MenuItem>
+                  <MenuItem value="America/Chicago">Central</MenuItem>
+                  <MenuItem value="America/New_York">Eastern</MenuItem>
+                </Select>
+              </FormControl>
+              {/* Date Time Selector */}
+              <LocalizationProvider dateAdapter={AdapterDayjs}>
+                <div className="max-w-92">
+                  <DateTimePicker
+                    disabled={currentMode}
+                    views={["year", "month", "day", "hours", "minutes"]}
+                    ampm={false}
+                    label="Radar Data Start Time"
+                    value={selectedDateTime}
+                    onChange={(newValue) =>
+                      setSelectedDateTime(dayjs(newValue).tz(timezone))
+                    }
+                    defaultValue={dayjs("2026-03-11T15:00")}
+                    className="w-full"
+                  />
+                </div>
+              </LocalizationProvider>
+            </div>
+          </div>
+          {/* Fetch Button */}
+          <Button
+            className="w-full max-w-92 h-14"
+            onClick={fetchRadarData}
+            variant="contained"
+          >
+            Get Radar Data
+          </Button>
+          {jobStatus === "PROCESSING" && (
+            <p>
+              The radar data is being processed. This usually takes a couple
+              minutes.
+            </p>
+          )}
+          {jobStatus === "REQUESTED" && (
+            <p>The radar data has been requested. Please wait.</p>
+          )}
+          {errorMessage && <p className="font-bold">{errorMessage}</p>}
+        </div>
+
+        <div className="bg-gray-50 min-h-100 w-full">
+          <LeafletMap
+            stations={stations}
+            selectedStation={selectedStation}
+            setSelectedStation={setSelectedStation}
+            frames={frames}
+            currentFrameIndex={currentFrameIndex}
+          />
+          <div className="flex w-full items-center p-8">
+            <button
+              type="button"
+              onClick={() => setIsPlaying(!isPlaying)}
+              className="mr-4 cursor-pointer text-white rounded-full bg-[#1976d2] hover:bg-[#1565c0] shadow hover:shadow-lg transition-all flex p-3 h-max"
+            >
+              {isPlaying ? <PauseIcon /> : <PlayArrowIcon />}
+            </button>
+            <Slider
+              value={currentFrameIndex}
+              min={0}
+              max={frames.length > 0 ? frames.length - 1 : 0}
+              step={1}
+              onChange={handleSliderChange}
+              valueLabelDisplay="auto"
+              marks={frames.map((_, i) => ({ value: i }))}
+            />
           </div>
         </div>
-        {/* Fetch Button */}
-        <Button
-          className="md:w-[20%] h-14"
-          onClick={fetchRadarData}
-          variant="contained"
-        >
-          Get Radar Data
-        </Button>
       </div>
-      {jobStatus === "PROCESSING" && (
-        <p>
-          The radar data is being processed. This usually takes a couple
-          minutes.
-        </p>
-      )}
-      {jobStatus === "REQUESTED" && (
-        <p>The radar data has been requested. Please wait.</p>
-      )}
-      {errorMessage && <p className="font-bold">{errorMessage}</p>}
-
-      <div className="flex w-full mt-20 mb-2 items-center px-4">
-        <button
-          type="button"
-          onClick={() => setIsPlaying(!isPlaying)}
-          className="mr-4 cursor-pointer text-white rounded-full bg-[#1976d2] hover:bg-[#1565c0] shadow hover:shadow-lg transition-all flex p-3 h-max"
-        >
-          {isPlaying ? <PauseIcon /> : <PlayArrowIcon />}
-        </button>
-        <Slider
-          value={currentFrameIndex}
-          min={0}
-          max={frames.length - 1}
-          step={1}
-          onChange={handleSliderChange}
-          valueLabelDisplay="auto"
-          marks={frames.map((_, i) => ({ value: i }))}
-        />
-      </div>
-
-      <Container className="bg-gray-50 min-h-100">
-        <LeafletMap
-          stations={stations}
-          selectedStation={selectedStation}
-          setSelectedStation={setSelectedStation}
-          frames={frames}
-          currentFrameIndex={currentFrameIndex}
-        />
-      </Container>
-    </Container>
+    </div>
   );
 }
