@@ -53,7 +53,7 @@ export default function LeafletMap({
       <MapContainer
         center={mapLatLng}
         zoom={4}
-        scrollWheelZoom={false}
+        scrollWheelZoom={true}
         style={{ height: "600px", width: "100%" }}
         ref={setMap}
       >
@@ -78,10 +78,11 @@ export default function LeafletMap({
                 <span className="font-bold">{name}</span> ({id}) <br />
                 <button
                   type="button"
-                  className={`w-full font-bold py-1 mt-1 rounded ${isSelected
-                    ? "bg-white outline-2 outline-gray-200"
-                    : "bg-[#1976d2] hover:bg-[#1565c0] text-white cursor-pointer"
-                    }`}
+                  className={`w-full font-bold py-1 mt-1 rounded ${
+                    isSelected
+                      ? "bg-white outline-2 outline-gray-200"
+                      : "bg-[#1976d2] hover:bg-[#1565c0] text-white cursor-pointer"
+                  }`}
                   onClick={() => setSelectedStation(station)}
                 >
                   {isSelected ? "Selected" : "Select"}
