@@ -29,6 +29,7 @@ export default function App() {
   );
   const [timezone, setTimezone] = useState(dayjs.tz.guess());
   const [selectedDuration, setSelectedDuration] = useState("60");
+  const [geotiffOpacity, setGeotiffOpacity] = useState("100");
 
   // API State
   const [jobStatus, setJobStatus] = useState("NONE");
@@ -314,6 +315,19 @@ export default function App() {
             <p>The radar data is pending. Please wait.</p>
           )}
           {errorMessage && <p className="font-bold">{errorMessage}</p>}
+          {numFrames !== 0 && <div className="flex items-center w-full max-w-[1000px] bg-white p-2 rounded-full md:shadow-2xl md:mr-4 md:pr-4 mt-3">
+                <p className="min-w-fit px-3 font-semibold">Opacity</p>
+                <Slider
+                  value={geotiffOpacity}
+                  min={0}
+                  max={100}
+                  step={1}
+                  onChange={(event, newValue) => setGeotiffOpacity(newValue)}
+                  valueLabelDisplay="auto"
+                />     
+                <p className="min-w-fit px-3">{geotiffOpacity}%</p>          
+                </div>
+              }
           {/* Playback Controls */}
           {/* The CSS is a little cursed. */}
           <div className="flex h-full items-end">
@@ -348,6 +362,7 @@ export default function App() {
               setSelectedStation={setSelectedStation}
               frames={frames}
               currentFrameIndex={currentFrameIndex}
+              opacity={geotiffOpacity}
             />
           </div>
         </div>
