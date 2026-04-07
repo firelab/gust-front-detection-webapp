@@ -217,14 +217,14 @@ export default function App() {
   return (
     <div>
       <div className="flex flex-col md:flex-row w-full">
-        <div className="md:mt-12 p-4 gap-4 min-w-92 flex flex-col">
+        <div className="md:mt-12 p-4 gap-4 md:w-92 w-full flex flex-col">
           {/* Station Selector */}
           <RadarStationDropdown
             stations={stations}
             selectedStation={selectedStation}
             setSelectedStation={setSelectedStation}
           />
-          <div className="flex flex-col bg-white">
+          <div className="flex flex-col">
             <div className="flex items-center">
               <Checkbox
                 checked={currentMode}
@@ -246,7 +246,7 @@ export default function App() {
                 <InputLabel>Duration</InputLabel>
                 <Select
                   label="Duration"
-                  className="mr-1 mb-2"
+                  className="mr-2 mb-3"
                   value={selectedDuration}
                   onChange={(e) => setSelectedDuration(e.target.value)}
                 >
@@ -261,7 +261,7 @@ export default function App() {
                 <Select
                   disabled={currentMode}
                   value={timezone}
-                  className="mr-1"
+                  className="mr-2"
                   label="Timezone"
                   onChange={handleTimezoneChange}
                 >
@@ -297,6 +297,7 @@ export default function App() {
             className="w-full max-w-92 h-14"
             onClick={fetchRadarData}
             variant="contained"
+            loading={jobStatus === "REQUESTED" || jobStatus === "PROCESSING" || jobStatus === "PENDING"}
           >
             Get Radar Data
           </Button>
@@ -309,33 +310,44 @@ export default function App() {
           {jobStatus === "REQUESTED" && (
             <p>The radar data has been requested. Please wait.</p>
           )}
+          {jobStatus === "PENDING" && (
+            <p>The radar data is pending. Please wait.</p>
+          )}
           {errorMessage && <p className="font-bold">{errorMessage}</p>}
+          {/* Playback Controls */}
+          {/* The CSS is a little cursed. */}
+          <div className="flex h-full items-end">
+            <div className=" flex md:min-w-[calc(100vw-1rem)] md:pl-92 z-999 w-full">
+              {numFrames !== 0 && <div className="flex items-center w-full max-w-[1000px] bg-white p-2 rounded-full md:shadow-2xl md:mr-4 md:pr-4">
+                <button
+                  type="button"
+                  onClick={() => setIsPlaying(!isPlaying)}
+                  className="mr-4 cursor-pointer text-white rounded-full bg-[#1976d2] hover:bg-[#1565c0] shadow hover:shadow-lg transition-all flex p-3 h-max"
+                >
+                  {isPlaying ? <PauseIcon /> : <PlayArrowIcon />}
+                </button>
+                <Slider
+                  value={currentFrameIndex}
+                  min={0}
+                  max={frames.length > 0 ? frames.length - 1 : 0}
+                  step={1}
+                  onChange={handleSliderChange}
+                  valueLabelDisplay="auto"
+                  marks={frames.map((_, i) => ({ value: i }))}
+                />
+              </div>}
+            </div>
+          </div>
         </div>
 
         <div className="bg-gray-50 min-h-100 w-full">
-          <LeafletMap
-            stations={stations}
-            selectedStation={selectedStation}
-            setSelectedStation={setSelectedStation}
-            frames={frames}
-            currentFrameIndex={currentFrameIndex}
-          />
-          <div className="flex w-full items-center p-8">
-            <button
-              type="button"
-              onClick={() => setIsPlaying(!isPlaying)}
-              className="mr-4 cursor-pointer text-white rounded-full bg-[#1976d2] hover:bg-[#1565c0] shadow hover:shadow-lg transition-all flex p-3 h-max"
-            >
-              {isPlaying ? <PauseIcon /> : <PlayArrowIcon />}
-            </button>
-            <Slider
-              value={currentFrameIndex}
-              min={0}
-              max={frames.length > 0 ? frames.length - 1 : 0}
-              step={1}
-              onChange={handleSliderChange}
-              valueLabelDisplay="auto"
-              marks={frames.map((_, i) => ({ value: i }))}
+          <div className={jobStatus === "PROCESSING" || jobStatus === "REQUESTED" || jobStatus === "PENDING" ? "opacity-50" : ""}>
+            <LeafletMap
+              stations={stations}
+              selectedStation={selectedStation}
+              setSelectedStation={setSelectedStation}
+              frames={frames}
+              currentFrameIndex={currentFrameIndex}
             />
           </div>
         </div>
