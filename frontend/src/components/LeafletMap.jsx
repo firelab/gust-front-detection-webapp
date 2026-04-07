@@ -1,7 +1,5 @@
 {
   /* Note that the leaflet map requires a defined height. */
-}
-{
   /* Vite hot reload has inconsistent behavior when making changes to the map, be sure to *fully* reload the page */
 }
 
@@ -41,7 +39,7 @@ export default function LeafletMap({
   }, [selectedStation, map]);
 
   return (
-    <div>
+    <div className="h-[600px] md:h-screen">
       {map && (
         <DisplayPosition
           map={map}
@@ -54,7 +52,7 @@ export default function LeafletMap({
         center={mapLatLng}
         zoom={4}
         scrollWheelZoom={true}
-        style={{ height: "600px", width: "100%" }}
+        style={{ height: "100%", width: "100%" }}
         ref={setMap}
       >
         <TileLayer
@@ -78,11 +76,10 @@ export default function LeafletMap({
                 <span className="font-bold">{name}</span> ({id}) <br />
                 <button
                   type="button"
-                  className={`w-full font-bold py-1 mt-1 rounded ${
-                    isSelected
-                      ? "bg-white outline-2 outline-gray-200"
-                      : "bg-[#1976d2] hover:bg-[#1565c0] text-white cursor-pointer"
-                  }`}
+                  className={`w-full font-bold py-1 mt-1 rounded ${isSelected
+                    ? "bg-white outline-2 outline-gray-200"
+                    : "bg-[#1976d2] hover:bg-[#1565c0] text-white cursor-pointer"
+                    }`}
                   onClick={() => setSelectedStation(station)}
                 >
                   {isSelected ? "Selected" : "Select"}
