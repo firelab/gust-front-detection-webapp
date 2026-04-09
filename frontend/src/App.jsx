@@ -29,7 +29,7 @@ export default function App() {
   );
   const [timezone, setTimezone] = useState(dayjs.tz.guess());
   const [selectedDuration, setSelectedDuration] = useState("60");
-  const [geotiffOpacity, setGeotiffOpacity] = useState("100");
+  const [geotiffOpacity, setGeotiffOpacity] = useState("80");
 
   // API State
   const [jobStatus, setJobStatus] = useState("NONE");
@@ -134,6 +134,7 @@ export default function App() {
         );
         const urls = await Promise.all(promises);
         setFrames(urls);
+        setIsPlaying(true);
         console.log("Frames fetched successfully: ", urls);
       } catch (err) {
         console.error("Error fetching frames:", err);
@@ -298,7 +299,11 @@ export default function App() {
             className="w-full max-w-92 h-14"
             onClick={fetchRadarData}
             variant="contained"
-            loading={jobStatus === "REQUESTED" || jobStatus === "PROCESSING" || jobStatus === "PENDING"}
+            loading={
+              jobStatus === "REQUESTED" ||
+              jobStatus === "PROCESSING" ||
+              jobStatus === "PENDING"
+            }
           >
             Get Radar Data
           </Button>
@@ -315,47 +320,70 @@ export default function App() {
             <p>The radar data is pending. Please wait.</p>
           )}
           {errorMessage && <p className="font-bold">{errorMessage}</p>}
-          {numFrames !== 0 && <div className="flex items-center w-full max-w-[1000px] bg-white p-2 rounded-full md:shadow-2xl md:mr-4 md:pr-4 mt-3">
-                <p className="min-w-fit px-3 font-semibold">Opacity</p>
-                <Slider
-                  value={geotiffOpacity}
-                  min={0}
-                  max={100}
-                  step={1}
-                  onChange={(event, newValue) => setGeotiffOpacity(newValue)}
-                  valueLabelDisplay="auto"
-                />     
-                <p className="min-w-fit px-3">{geotiffOpacity}%</p>          
-                </div>
-              }
           {/* Playback Controls */}
           {/* The CSS is a little cursed. */}
           <div className="flex h-full items-end">
             <div className=" flex md:min-w-[calc(100vw-1rem)] md:pl-92 z-999 w-full">
-              {numFrames !== 0 && <div className="flex items-center w-full max-w-[1000px] bg-white p-2 rounded-full md:shadow-2xl md:mr-4 md:pr-4">
-                <button
-                  type="button"
-                  onClick={() => setIsPlaying(!isPlaying)}
-                  className="mr-4 cursor-pointer text-white rounded-full bg-[#1976d2] hover:bg-[#1565c0] shadow hover:shadow-lg transition-all flex p-3 h-max"
-                >
-                  {isPlaying ? <PauseIcon /> : <PlayArrowIcon />}
-                </button>
-                <Slider
-                  value={currentFrameIndex}
-                  min={0}
-                  max={frames.length > 0 ? frames.length - 1 : 0}
-                  step={1}
-                  onChange={handleSliderChange}
-                  valueLabelDisplay="auto"
-                  marks={frames.map((_, i) => ({ value: i }))}
-                />
-              </div>}
+              {numFrames !== 0 && (
+                <div className="flex flex-col items-center w-full max-w-[800px] bg-white p-2 rounded-xl md:shadow-2xl md:mr-4 md:pr-4">
+                  <div className="flex w-full items-center">
+                    <button
+                      type="button"
+                      onClick={() => setIsPlaying(!isPlaying)}
+                      className="mr-6 ml-2 cursor-pointer text-white rounded-full bg-[#1976d2] hover:bg-[#1565c0] shadow hover:shadow-lg transition-all flex p-3 h-max"
+                    >
+                      {isPlaying ? <PauseIcon /> : <PlayArrowIcon />}
+                    </button>
+                    <Slider
+                      value={currentFrameIndex}
+                      min={0}
+                      max={frames.length > 0 ? frames.length - 1 : 0}
+                      step={1}
+                      onChange={handleSliderChange}
+                      valueLabelDisplay="auto"
+                      marks={frames.map((_, i) => ({ value: i }))}
+                    />
+                  </div>
+                  <div className="flex w-full pt-4">
+                    <div className="flex items-center w-1/2">
+                      <p className="min-w-fit px-3 text-sm">Opacity</p>
+                      <Slider
+                        value={geotiffOpacity}
+                        min={0}
+                        max={100}
+                        step={1}
+                        onChange={(event, newValue) =>
+                          setGeotiffOpacity(newValue)
+                        }
+                        valueLabelDisplay="auto"
+                      />
+                      <p className="min-w-fit px-3">{geotiffOpacity}%</p>
+                    </div>
+                    <div className="w-1/2">
+                      {/*TODO: Actual timestamp will go here: */}
+                      <p className="text-sm text-right">
+                        {selectedDateTime
+                          .tz(timezone)
+                          .format("YYYY-MM-DD HH:mm z")}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
 
         <div className="bg-gray-50 min-h-100 w-full">
-          <div className={jobStatus === "PROCESSING" || jobStatus === "REQUESTED" || jobStatus === "PENDING" ? "opacity-50" : ""}>
+          <div
+            className={
+              jobStatus === "PROCESSING" ||
+              jobStatus === "REQUESTED" ||
+              jobStatus === "PENDING"
+                ? "opacity-50"
+                : ""
+            }
+          >
             <LeafletMap
               stations={stations}
               selectedStation={selectedStation}
