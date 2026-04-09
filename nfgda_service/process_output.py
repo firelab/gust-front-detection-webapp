@@ -94,10 +94,21 @@ def generate_geotiff_output(job_id: str, redis_client: redis.Redis):
     
     radar_lon, radar_lat = radar_coords
 
-    # process each file
+    # process each file and collect per-frame observation timestamps
+    timestamps = {}
     for i, file in enumerate(files):
         logger.info(f'processing file {i+1} of {len(files)} into GeoTIFF format')
-        project_data(os.path.join(f"/nfgda_output/{job_id}/nfgda_detection", file), radar_lat, radar_lon, out_dir, i)
+        npz_path = os.path.join(f"/nfgda_output/{job_id}/nfgda_detection", file)
+        ts = extract_timestamp(npz_path)
+        if ts is not None:
+            timestamps[i] = ts
+        project_data(npz_path, radar_lat, radar_lon, out_dir, i)
+
+    # write manifest so the API can serve observation timestamps per frame
+    manifest_path = os.path.join(out_dir, "timestamps.json")
+    with open(manifest_path, "w") as f:
+        json.dump(timestamps, f)
+    logger.info(f"Wrote timestamp manifest with {len(timestamps)} entries to {manifest_path}")
     
 
 def get_radar_coords(station_id: str, redis_client: redis.Redis) -> tuple[float, float]:
@@ -138,6 +149,24 @@ def _reflectivity_to_rgba(refl: np.ndarray, nfout: np.ndarray) -> np.ndarray:
         rgba[gf_draw] = _GF_RGBA
 
     return rgba
+
+
+def extract_timestamp(npz_path: str) -> str | None:
+    """Return the radar observation time from a detection .npz as an ISO 8601 UTC string,
+    or None if the key is absent or unparseable."""
+    try:
+        data = np.load(npz_path, allow_pickle=True)
+        if "timestamp" not in data:
+            return None
+        ts = data["timestamp"]
+        # numpy.datetime64 (0-d array) -> Python datetime -> ISO string
+        # .item() is required to get the Python scalar; .astype(object) keeps it
+        # as a 0-d ndarray which has no .strftime()
+        ts_dt = ts.astype("datetime64[s]").item()
+        return ts_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+    except Exception as e:
+        logger.warning(f"Could not extract timestamp from {npz_path}: {e}")
+        return None
 
 
 def project_data(npz_path: str, radar_lat: float, radar_lon: float, out_dir: str, index: int) -> None:
