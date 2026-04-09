@@ -3,7 +3,7 @@ import L from "leaflet";
 import { useEffect, useState } from "react";
 import { ImageOverlay } from "react-leaflet";
 
-export default function GeotiffAnimation({ frames, currentIndex }) {
+export default function GeotiffAnimation({ frames, currentIndex, opacity }) {
   const [frameData, setFrameData] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -76,7 +76,7 @@ export default function GeotiffAnimation({ frames, currentIndex }) {
       url={frameData[currentIndex].url}
       bounds={frameData[currentIndex].bounds}
       zIndex={1000}
-      opacity={0.7}
+      opacity={opacity / 100}
     />
   );
 }

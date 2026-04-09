@@ -27,6 +27,7 @@ export default function LeafletMap({
   setSelectedStation,
   frames = [],
   currentFrameIndex,
+  opacity
 }) {
   const [map, setMap] = useState(null);
   const [mapLatLng, setMapLatLng] = useState({ lat: 40.0, lng: -98.0 });
@@ -88,7 +89,7 @@ export default function LeafletMap({
             </Marker>
           );
         })}
-        <GeoTiffAnimation frames={frames} currentIndex={currentFrameIndex} />
+        <GeoTiffAnimation frames={frames} currentIndex={currentFrameIndex} opacity={opacity} />
       </MapContainer>
     </div>
   );
