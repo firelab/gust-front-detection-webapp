@@ -1,3 +1,4 @@
+import os
 import redis
 from flask import Flask, jsonify, request
 from apis.stations import list_stations_api
@@ -7,8 +8,13 @@ from apis.retrieve_frames import get_frame
 
 app = Flask(__name__)
 
-# Connect to the Redis container
-redis_client = redis.Redis(host='gust-front-detection-webapp_redis_1', port=6379, db=0, decode_responses=True)
+# Connect to the Redis container using service-name DNS (injected via docker-compose env)
+redis_client = redis.Redis(
+    host=os.getenv("REDIS_HOST", "redis"),
+    port=int(os.getenv("REDIS_PORT", "6379")),
+    db=int(os.getenv("REDIS_DB", "0")),
+    decode_responses=True
+)
 
 # Station List API
 @app.route("/apis/stations", methods=["GET"])
