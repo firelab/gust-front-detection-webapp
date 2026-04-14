@@ -49,8 +49,16 @@ export default function App() {
   const fetchRadarData = async () => {
     try {
       // ---- validate request ----
+      //check if station is selected
       if (!selectedStation?.properties?.station_id) {
         setErrorMessage("Please select a radar station first.");
+        return;
+      }
+      // check if endTime is in the past
+      if (!currentMode && selectedDateTime.isAfter(dayjs().subtract(Number(selectedDuration), "minute"))) {
+        setErrorMessage(
+          `Please select a start time at least ${selectedDuration} minutes in the past`,
+        );
         return;
       }
       setErrorMessage("");
@@ -59,7 +67,6 @@ export default function App() {
         stationId: selectedStation.properties.station_id,
       };
       if (!currentMode) {
-        console.log("using historical data");
         requestBody.startUtc = selectedDateTime
           .utc()
           .format("YYYY-MM-DDTHH:mm:ss[Z]");
@@ -68,7 +75,6 @@ export default function App() {
           .utc()
           .format("YYYY-MM-DDTHH:mm:ss[Z]");
       } else {
-        console.log("using current data");
         requestBody.startUtc = dayjs()
           .subtract(durationMinutes + 15, "minute")
           .utc()
@@ -119,29 +125,37 @@ export default function App() {
   };
 
   // fetch frames once the job is completed and the jobId and numFrames are set
-  useEffect(() => {
-    async function fetchFrames() {
-      if (jobStatus !== "COMPLETED" || !jobId || numFrames <= 0) return;
-      console.log(`attempting to fetch ${numFrames} frames for job ${jobId}`);
-      try {
-        const promises = Array.from({ length: numFrames }, (_, i) =>
-          fetch(`/apis/jobs/${jobId}/frames/${i}`)
-            .then((res) => {
-              if (!res.ok) throw new Error(`Failed frame ${i}`);
-              return res.blob();
-            })
-            .then((blob) => URL.createObjectURL(blob)),
-        );
-        const urls = await Promise.all(promises);
-        setFrames(urls);
-        setIsPlaying(true);
-        console.log("Frames fetched successfully: ", urls);
-      } catch (err) {
-        console.error("Error fetching frames:", err);
-      }
+useEffect(() => {
+  async function fetchFrames() {
+    if (jobStatus !== "COMPLETED" || !jobId || numFrames <= 0) return;
+    console.log(`attempting to fetch ${numFrames} frames for job ${jobId}`);
+    try {
+      const promises = Array.from({ length: numFrames }, async (_, i) => {
+        const res = await fetch(`/apis/jobs/${jobId}/frames/${i}`);
+        if (res.status === 404) {
+            console.warn(`Frame ${i} gave 404 - skipping`);
+            return null;
+          }
+        if (!res.ok) throw new Error(`Failed frame ${i}`);
+        const timestamp = res.headers.get("x-frame-timestamp");
+        const blob = await res.blob();
+        return {
+          url: URL.createObjectURL(blob),
+          timestamp,
+          index: i,
+        };
+      });
+      const frames = await Promise.all(promises);
+      frames.filter(Boolean).sort((a, b) => a.index - b.index);
+      setFrames(frames);
+      setIsPlaying(frames.length > 0);
+      console.log("Frames fetched successfully: ", frames);
+    } catch (err) {
+      console.error("Error fetching frames:", err);
     }
-    fetchFrames();
-  }, [jobStatus, jobId, numFrames]);
+  }
+  fetchFrames();
+}, [jobStatus, jobId, numFrames]);
 
   // fetch radar stations from backend at /apis/stations
   useEffect(() => {
@@ -360,11 +374,10 @@ export default function App() {
                       <p className="min-w-fit px-3">{geotiffOpacity}%</p>
                     </div>
                     <div className="w-1/2">
-                      {/*TODO: Actual timestamp will go here: */}
                       <p className="text-sm text-right">
-                        {selectedDateTime
-                          .tz(timezone)
-                          .format("YYYY-MM-DD HH:mm z")}
+                        {frames[currentFrameIndex]?.timestamp
+                          ? `${dayjs(frames[currentFrameIndex].timestamp).tz(timezone).format("YYYY-MM-DD HH:mm z")}`
+                          : "No timestamp available"}
                       </p>
                     </div>
                   </div>
