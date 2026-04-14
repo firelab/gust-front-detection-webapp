@@ -38,7 +38,6 @@ And then there's a redis instance living at port 6379 where all the job status a
 
 ### Todo before MSU handoff
 
-- [ ] Switching to a new station view pauses slide deck playthrough
 - [ ] Add a "clear" button to the map that clears all job assets from the map
 - [ ] Discuss pixel-width of gust fronts written to output file next team meeting
 - [ ] Diff the NFGDA code used in nfgda_service with the original NFGDA code, see if there are any useful features we're missing out on or bugs we introduced

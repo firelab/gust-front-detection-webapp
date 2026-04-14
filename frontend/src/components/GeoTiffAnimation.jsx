@@ -10,8 +10,8 @@ export default function GeotiffAnimation({ frames, currentIndex, opacity }) {
   useEffect(() => {
     async function processFrames() {
       const processed = await Promise.all(
-        frames.map(async (url) => {
-          const res = await fetch(url);
+        frames.map(async (frame) => {
+          const res = await fetch(frame.url);
           const buf = await res.arrayBuffer();
           const geo = await parseGeoraster(buf);
 
