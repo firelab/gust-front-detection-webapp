@@ -38,11 +38,7 @@ And then there's a redis instance living at port 6379 where all the job status a
 
 ### Todo before MSU handoff
 
-- [ ] Switching to a new station view pauses slide deck playthrough
-- [ ] Can we pretty up the landing page? Put a title on it somewhere before the research celebration?
-- [ ] Set opacity slider on frontend
 - [ ] Add a "clear" button to the map that clears all job assets from the map
-- [ ] Deliver frame time-stamps to the frontend
 - [ ] Switch to cloud-optimized geotiffs
 - [ ] Make some stuff environment variables instead of random variables everywhere
 - [ ] Discuss pixel-width of gust fronts written to output file next team meeting
