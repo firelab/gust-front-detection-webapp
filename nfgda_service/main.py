@@ -78,7 +78,7 @@ def process_geotiff_output(job_id: str) -> None:
         redis_client.hset(f"job:{job_id}", mapping={"status": "FAILED", "error_message": result})
     else:
         logger.info("successfully generated GeoTIFF series for job %s", job_id)
-        redis_client.hset(f"job:{job_id}", mapping={"status": "COMPLETED", "num_frames": len(os.listdir(f"/processed_data/{job_id}"))})
+        redis_client.hset(f"job:{job_id}", mapping={"status": "COMPLETED", "num_frames": len(os.listdir(f"/processed_data/{job_id}")) - 1}) # subtract 1 for the timestamps.json file
 
 async def run_and_release_job(job_id: str) -> None:
     """Run a job and release the semaphore when finished."""
