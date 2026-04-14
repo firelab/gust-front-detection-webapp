@@ -136,26 +136,26 @@ useEffect(() => {
             console.warn(`Frame ${i} gave 404 - skipping`);
             return null;
           }
-        if (!res.ok) throw new Error(`Failed frame ${i}`);
-        const timestamp = res.headers.get("x-frame-timestamp");
-        const blob = await res.blob();
-        return {
-          url: URL.createObjectURL(blob),
-          timestamp,
-          index: i,
-        };
-      });
-      const frames = await Promise.all(promises);
-      frames.filter(Boolean).sort((a, b) => a.index - b.index);
-      setFrames(frames);
-      setIsPlaying(frames.length > 0);
-      console.log("Frames fetched successfully: ", frames);
-    } catch (err) {
-      console.error("Error fetching frames:", err);
+          if (!res.ok) throw new Error(`Failed frame ${i}`);
+          const timestamp = res.headers.get("x-frame-timestamp");
+          const blob = await res.blob();
+          return {
+            url: URL.createObjectURL(blob),
+            timestamp,
+            index: i,
+          };
+        });
+        const frames = await Promise.all(promises);
+        frames.filter(Boolean).sort((a, b) => a.index - b.index);
+        setFrames(frames);
+        setIsPlaying(frames.length > 0);
+        console.log("Frames fetched successfully: ", frames);
+      } catch (err) {
+        console.error("Error fetching frames:", err);
+      }
     }
-  }
-  fetchFrames();
-}, [jobStatus, jobId, numFrames]);
+    fetchFrames();
+  }, [jobStatus, jobId, numFrames]);
 
   // fetch radar stations from backend at /apis/stations
   useEffect(() => {
@@ -233,7 +233,10 @@ useEffect(() => {
   return (
     <div>
       <div className="flex flex-col md:flex-row w-full">
-        <div className="md:mt-12 p-4 gap-4 md:w-92 w-full flex flex-col">
+        <div className="md:mt-6 p-4 gap-4 md:w-92 w-full flex flex-col">
+          <div className="mb-6 items-center gap-4">
+            <h1 className="text-3xl font-light">Gust Front Web App</h1>
+          </div>
           {/* Station Selector */}
           <RadarStationDropdown
             stations={stations}
@@ -391,8 +394,8 @@ useEffect(() => {
           <div
             className={
               jobStatus === "PROCESSING" ||
-              jobStatus === "REQUESTED" ||
-              jobStatus === "PENDING"
+                jobStatus === "REQUESTED" ||
+                jobStatus === "PENDING"
                 ? "opacity-50"
                 : ""
             }
@@ -408,6 +411,12 @@ useEffect(() => {
           </div>
         </div>
       </div>
+      <footer className=" m-4 absolute bottom-0 left-0 hidden md:block shadow-xl hover:shadow-sm transition-all">
+        <a className="outline-1 hover:text-black opacity-50 hover:opacity-100 transition-all rounded-md p-2 flex gap-2 items-center" href="https://github.com/firelab/gust-front-detection-webapp" target="_blank" rel="noopener noreferrer">
+          <p className="">Code</p>
+          <img src="/assets/github.svg" alt="GitHub" className="w-6 h-6" />
+        </a>
+      </footer>
     </div>
   );
 }
