@@ -104,12 +104,50 @@ def generate_geotiff_output(job_id: str, redis_client: redis.Redis):
             timestamps[i] = ts
         project_data(npz_path, radar_lat, radar_lon, out_dir, i)
 
+    # Reorder frames so that indexes are in chronological order.
+    timestamps = _reorder_frames_chronologically(timestamps, out_dir)
+
     # write manifest so the API can serve observation timestamps per frame
     manifest_path = os.path.join(out_dir, "timestamps.json")
     with open(manifest_path, "w") as f:
         json.dump(timestamps, f)
     logger.info(f"Wrote timestamp manifest with {len(timestamps)} entries to {manifest_path}")
     
+
+def _reorder_frames_chronologically(timestamps: dict[int, str], out_dir: str) -> dict[int, str]:
+    """Sort frame GeoTIFFs so that frame index 0 is the earliest """
+    
+    if not timestamps:
+        return timestamps
+
+    # build a list of (current_index, timestamp_str) sorted by time
+    sorted_pairs = sorted(timestamps.items(), key=lambda kv: kv[1])
+
+    # if already in order, skip the renaming process
+    already_ordered = all(sorted_pairs[j][0] == j for j in range(len(sorted_pairs)))
+    if already_ordered:
+        logger.info("Frames are already in chronological order; skipping rename.")
+        return timestamps
+
+    logger.info("Reordering frames to chronological order: %s", [(old_idx, ts) for old_idx, ts in sorted_pairs])
+
+    # rename every frame_<old>.tif to frame_<old>.tif.tmp
+    for old_idx, _ in sorted_pairs:
+        src = os.path.join(out_dir, f"frame_{old_idx}.tif")
+        tmp = os.path.join(out_dir, f"frame_{old_idx}.tif.tmp")
+        if os.path.exists(src):
+            os.rename(src, tmp)
+
+    # rename frame_<old>.tif.tmp to frame_<new>.tif
+    new_timestamps: dict[int, str] = {}
+    for new_idx, (old_idx, ts) in enumerate(sorted_pairs):
+        tmp = os.path.join(out_dir, f"frame_{old_idx}.tif.tmp")
+        dst = os.path.join(out_dir, f"frame_{new_idx}.tif")
+        if os.path.exists(tmp):
+            os.rename(tmp, dst)
+        new_timestamps[new_idx] = ts
+
+    return new_timestamps
 
 def get_radar_coords(station_id: str, redis_client: redis.Redis) -> tuple[float, float]:
     station_json = redis_client.hget("stations", station_id)
@@ -170,24 +208,19 @@ def extract_timestamp(npz_path: str) -> str | None:
 
 
 def project_data(npz_path: str, radar_lat: float, radar_lon: float, out_dir: str, index: int) -> None:
-
-    # ---------------------------
-    # Parameters
-    # ---------------------------
+    
     ae_tif = os.path.join(out_dir, f"radar_reflectivity_ae_{index}.tif")
     final_tif = os.path.join(out_dir, f"frame_{index}.tif")
 
     pixel_size_m = 500.0   # 500 m spacing
     channel_index = 1      # channel 1 = reflectivity (0-based)
 
-    # ---------------------------
-    # Load data
-    # ---------------------------
+    # load data
     data = np.load(npz_path)
     array = data['inputNF']
     nfout = data['nfout'] if 'nfout' in data else None
 
-    # Flip vertically
+    # flip vertically
     array = np.flipud(array)
     if nfout is not None:
         nfout = np.flipud(nfout)
@@ -195,9 +228,7 @@ def project_data(npz_path: str, radar_lat: float, radar_lon: float, out_dir: str
     refl = array[:, :, channel_index].astype(np.float64)
     ny, nx = refl.shape
 
-    # ---------------------------
-    # Log data range for debugging
-    # ---------------------------
+    # log data range for debugging
     valid_mask = ~np.isnan(refl)
     nan_count = np.count_nonzero(~valid_mask)
     logger.info(
@@ -210,15 +241,11 @@ def project_data(npz_path: str, radar_lat: float, radar_lon: float, out_dir: str
     if nfout is not None:
         logger.info(f"Gust-front pixels: {np.count_nonzero(nfout)}")
 
-    # ---------------------------
-    # Render to RGBA
-    # ---------------------------
+    # render to RGBA
     rgba = _reflectivity_to_rgba(refl, nfout)
 
-    # ---------------------------
-    # Spatial references
-    # Azimuthal Equidistant centered on the radar
-    # ---------------------------
+    # spatial references
+    # azimuthal equidistant centered on the radar
     ae_srs = osr.SpatialReference()
     ae_srs.SetAE(
         radar_lat,
@@ -228,9 +255,7 @@ def project_data(npz_path: str, radar_lat: float, radar_lon: float, out_dir: str
     )
     ae_srs.SetWellKnownGeogCS("WGS84")
 
-    # ---------------------------
-    # GeoTransform (centered on radar)
-    # ---------------------------
+    # geotransform (centered on radar)
     origin_x = -(nx / 2) * pixel_size_m
     origin_y =  (ny / 2) * pixel_size_m
 
@@ -243,9 +268,7 @@ def project_data(npz_path: str, radar_lat: float, radar_lon: float, out_dir: str
         -pixel_size_m
     )
 
-    # ---------------------------
-    # Write RGBA Azimuthal Equidistant GeoTIFF
-    # ---------------------------
+    # write RGBA Azimuthal Equidistant GeoTIFF
     driver = gdal.GetDriverByName("GTiff")
     ae_ds = driver.Create(
         ae_tif,
@@ -263,14 +286,12 @@ def project_data(npz_path: str, radar_lat: float, radar_lon: float, out_dir: str
         band = ae_ds.GetRasterBand(band_idx + 1)
         band.WriteArray(rgba[:, :, band_idx])
 
-    # Set alpha band interpretation
+    # set alpha band interpretation
     ae_ds.GetRasterBand(4).SetColorInterpretation(gdal.GCI_AlphaBand)
 
     ae_ds = None
 
-    # ---------------------------
-    # Reproject to EPSG:3857 for Leaflet
-    # ---------------------------
+    # reproject to EPSG:3857 for Leaflet
     warped_ds = gdal.Warp(
         "",
         ae_tif,
@@ -280,9 +301,7 @@ def project_data(npz_path: str, radar_lat: float, radar_lon: float, out_dir: str
         dstAlpha=False,    # keep our existing alpha band
     )
 
-    # ---------------------------
     # Write final Cloud-Optimized GeoTIFF
-    # ---------------------------
     driver = gdal.GetDriverByName("COG")
     driver.CreateCopy(
         final_tif,
