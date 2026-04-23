@@ -341,7 +341,6 @@ def _write_geotiff(rgba: np.ndarray, radar_lat: float, radar_lon: float,
 def project_data(npz_path: str, radar_lat: float, radar_lon: float,
                  out_dir: str, index: int, is_forecast: bool = False) -> None:
     """Project a detection .npz (inputNF + nfout) into a frame GeoTIFF."""
-    pixel_size_m = 500.0   # 500 m spacing
     channel_index = 1      # channel 1 = reflectivity (0-based)
 
     # load data
