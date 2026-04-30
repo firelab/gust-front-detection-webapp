@@ -40,6 +40,7 @@ export default function App() {
 
   // Playback State
   const [currentFrameIndex, setCurrentFrameIndex] = useState(0);
+  const [sliderValue, setSliderValue] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const playbackRef = useRef(null);
 
@@ -125,29 +126,49 @@ export default function App() {
   };
 
   // fetch frames once the job is completed and the jobId and numFrames are set
-useEffect(() => {
-  async function fetchFrames() {
-    if (jobStatus !== "COMPLETED" || !jobId || numFrames <= 0) return;
-    console.log(`attempting to fetch ${numFrames} frames for job ${jobId}`);
-    try {
-      const promises = Array.from({ length: numFrames }, async (_, i) => {
-        const res = await fetch(`/apis/jobs/${jobId}/frames/${i}`);
-        if (res.status === 404) {
+  useEffect(() => {
+    async function fetchFrames() {
+      if (jobStatus !== "COMPLETED" || !jobId || numFrames <= 0) return;
+      console.log(`attempting to fetch ${numFrames} frames for job ${jobId}`);
+      try {
+        const promises = Array.from({ length: numFrames }, async (_, i) => {
+          const res = await fetch(`/apis/jobs/${jobId}/frames/${i}`);
+          if (res.status === 404) {
             console.warn(`Frame ${i} gave 404 - skipping`);
             return null;
           }
           if (!res.ok) throw new Error(`Failed frame ${i}`);
           const timestamp = res.headers.get("x-frame-timestamp");
+          const isForecast = res.headers.get("x-frame-is-forecast");
           const blob = await res.blob();
           return {
             url: URL.createObjectURL(blob),
             timestamp,
+            isForecast,
             index: i,
           };
         });
         const frames = await Promise.all(promises);
-        frames.filter(Boolean).sort((a, b) => a.index - b.index);
-        setFrames(frames);
+
+        const processedFrames = frames
+          .filter(Boolean)
+          .sort((a, b) => a.index - b.index);
+
+        const firstTime = dayjs(processedFrames[0].timestamp).valueOf();
+        const lastTime = dayjs(processedFrames[processedFrames.length - 1].timestamp).valueOf();
+        const totalSpan = lastTime - firstTime || 1;
+
+        const sliderFrames = processedFrames.map((frame) => {
+          const t = dayjs(frame.timestamp).valueOf();
+          const relative = ((t - firstTime) / totalSpan) * 100;
+
+          return {
+            ...frame,
+            sliderValue: relative,
+          };
+        });
+
+        setFrames(sliderFrames);
         setIsPlaying(frames.length > 0);
         console.log("Frames fetched successfully: ", frames);
       } catch (err) {
@@ -211,21 +232,44 @@ useEffect(() => {
 
   // Handle Playback
   useEffect(() => {
-    if (isPlaying) {
+    if (isPlaying && frames.length > 0) {
       playbackRef.current = setInterval(() => {
-        setCurrentFrameIndex((prev) => (prev + 1) % frames.length);
+        setCurrentFrameIndex((prev) => {
+          const nextIndex = (prev + 1) % frames.length;
+          setSliderValue(frames[nextIndex].sliderValue);
+          return nextIndex;
+        });
       }, 300);
     } else {
       clearInterval(playbackRef.current);
     }
-
     return () => clearInterval(playbackRef.current);
-  }, [isPlaying, frames.length]);
+  }, [isPlaying, frames]);
 
   // Handle Slider Change
   const handleSliderChange = (event, newValue) => {
     setIsPlaying(false);
-    setCurrentFrameIndex(newValue);
+    const { frame, index } = getNearestFrame(newValue);
+    if (!frame) return;
+    setSliderValue(frame.sliderValue);
+    setCurrentFrameIndex(index);
+  };
+
+  const getNearestFrame = (val) => {
+    if (!frames.length) return { frame: null, index: 0 };
+    let nearestIndex = 0;
+    let nearestDistance = Math.abs(frames[0].sliderValue - val);
+    frames.forEach((frame, i) => {
+      const dist = Math.abs(frame.sliderValue - val);
+      if (dist < nearestDistance) {
+        nearestDistance = dist;
+        nearestIndex = i;
+      }
+    });
+    return {
+      frame: frames[nearestIndex],
+      index: nearestIndex,
+    };
   };
 
   // ---------------------------------------- JSX ----------------------------------------
@@ -340,9 +384,9 @@ useEffect(() => {
           {/* Playback Controls */}
           {/* The CSS is a little cursed. */}
           <div className="flex h-full items-end">
-            <div className=" flex md:min-w-[calc(100vw-1rem)] md:pl-92 z-999 w-full">
+            <div className=" flex md:min-w-[calc(100vw-1rem)] md:pl-92 z-998 w-full">
               {numFrames !== 0 && (
-                <div className="flex flex-col items-center w-full max-w-[800px] bg-white p-2 rounded-xl md:shadow-2xl md:mr-4 md:pr-4">
+                <div className="flex flex-col items-center w-full max-w-[1200px] bg-white p-2 rounded-xl md:shadow-2xl md:mr-4 md:pr-4">
                   <div className="flex w-full items-center">
                     <button
                       type="button"
@@ -352,13 +396,22 @@ useEffect(() => {
                       {isPlaying ? <PauseIcon /> : <PlayArrowIcon />}
                     </button>
                     <Slider
-                      value={currentFrameIndex}
+                      value={sliderValue}
                       min={0}
-                      max={frames.length > 0 ? frames.length - 1 : 0}
-                      step={1}
+                      max={100}
+                      step={null}
                       onChange={handleSliderChange}
                       valueLabelDisplay="auto"
-                      marks={frames.map((_, i) => ({ value: i }))}
+                      valueLabelFormat={() =>
+                        frames[currentFrameIndex]?.timestamp
+                          ? dayjs(frames[currentFrameIndex].timestamp)
+                            .tz(timezone)
+                            .format("YYYY-MM-DD HH:mm z")
+                          : "No timestamp"
+                      }
+                      marks={frames.map((frame, i) => ({
+                        value: frame.sliderValue,
+                      }))}
                     />
                   </div>
                   <div className="flex w-full pt-4">
@@ -411,7 +464,7 @@ useEffect(() => {
           </div>
         </div>
       </div>
-      <footer className=" m-4 absolute bottom-0 left-0 hidden md:block shadow-xl hover:shadow-sm transition-all">
+      <footer className="z-999 m-4 absolute bottom-0 left-0 hidden md:block shadow-xl hover:shadow-sm transition-all">
         <a className="outline-1 hover:text-black opacity-50 hover:opacity-100 transition-all rounded-md p-2 flex gap-2 items-center" href="https://github.com/firelab/gust-front-detection-webapp" target="_blank" rel="noopener noreferrer">
           <p className="">Code</p>
           <img src="/assets/github.svg" alt="GitHub" className="w-6 h-6" />
