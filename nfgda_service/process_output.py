@@ -66,7 +66,7 @@ _nexrad_norm = mcolors.BoundaryNorm(boundaries=_nexrad_boundaries, ncolors=_nexr
 # Gust-front overlay colors
 _GF_RGBA_DETECTED       = np.array([255,   0,   0, 255], dtype=np.uint8)  # red             – observed detection
 _GF_RGBA_FC_30          = np.array([255, 140,   0, 255], dtype=np.uint8)  # orange          – forecast ≥ 30%
-_GF_RGBA_FC_50          = np.array([220,  10, 120, 255], dtype=np.uint8)  # reddish-fuchsia – forecast ≥ 50% (slightly dimmed)
+_GF_RGBA_FC_50          = np.array([  0, 212, 255, 255], dtype=np.uint8)  # cyan            – forecast ≥ 50%
 _GF_RGBA_FC_75          = np.array([120,   0, 255, 255], dtype=np.uint8)  # vibrant violet  – forecast ≥ 75%
 _GF_RGBA_FORECAST       = _GF_RGBA_FC_75   # alias used in detection rendering (is_forecast=True path)
 
@@ -407,7 +407,7 @@ def project_forecast(npz_path: str, radar_lat: float, radar_lon: float,
     # Draw three contour levels, lowest first so higher-confidence rings overwrite.
     # Each level is skeletonized independently to produce a thin medial-axis line:
     #   30% (orange)          — gust front may pass here
-    #   50% (reddish-fuchsia) — moderate confidence
+    #   50% (cyan)            — moderate confidence
     #   75% (purple)          — high confidence core
     forecast_levels = [
         (30.0, _GF_RGBA_FC_30),
