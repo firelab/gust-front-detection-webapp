@@ -381,6 +381,31 @@ export default function App() {
             <p>The radar data is pending. Please wait.</p>
           )}
           {errorMessage && <p className="font-bold">{errorMessage}</p>}
+
+          {/* Legend */}
+          <div className="h-full max-h-10 ">
+          </div>
+          {numFrames !== 0 && <div className="hidden md:flex outline-1 outline-gray-300 rounded-md p-4 flex-col">
+            <p className="text-xl font-bold pb-2">Legend</p>
+            <div className="flex mb-2">
+              <div className="rounded-full shadow-md bg-red-500 w-10 h-full mr-3 "></div>
+              <p>Detected Gust Fronts</p>
+            </div>
+            <p className="font-bold mb-2">Forcasted Gust Front Probability</p>
+            <div className="flex mb-2">
+              <div className="rounded-full shadow-md bg-amber-500 w-10 h-full mr-3"></div>
+              <p>{"> 30% Confidence"}</p>
+            </div>
+            <div className="flex mb-2">
+              <div className="rounded-full shadow-md bg-cyan-300 w-10 h-full mr-3"></div>
+              <p>{"> 50% Confidence"}</p>
+            </div>
+            <div className="flex">
+              <div className="rounded-full shadow-md bg-purple-700 w-10 h-full mr-3"></div>
+              <p>{"> 75% Confidence"}</p>
+            </div>
+          </div>}
+
           {/* Playback Controls */}
           {/* The CSS is a little cursed. */}
           <div className="flex h-full items-end">
