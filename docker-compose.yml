@@ -3,6 +3,12 @@ services:
    image: redis:7-alpine
    ports:
      - "${REDIS_PORT}:6379"
+   healthcheck:
+     test: ["CMD", "redis-cli", "ping"]
+     interval: 5s
+     timeout: 3s
+     retries: 10
+     start_period: 5s
    networks:
      - nfgda_net
    ipv4_address: ${REDIS_HOST}
@@ -14,8 +20,10 @@ services:
    ports:
      - "8000:8000"
    depends_on:
-     - redis
-     - backend
+     redis:
+       condition: service_healthy
+     backend:
+       condition: service_started
    environment:
      - REDIS_HOST=${REDIS_HOST}
      - REDIS_PORT=${REDIS_PORT}
@@ -39,7 +47,8 @@ services:
    #   - ./frontend:/app
    #   - /app/node_modules
    depends_on:
-     - backend
+     backend:
+       condition: service_healthy
    networks:
      - nfgda_net
 
@@ -50,7 +59,8 @@ services:
    ports:
      - "8001:8001"
    depends_on:
-     - redis
+     redis:
+       condition: service_healthy
    environment:
      - REDIS_HOST=${REDIS_HOST}
      - REDIS_PORT=${REDIS_PORT}

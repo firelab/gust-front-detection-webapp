@@ -10,7 +10,7 @@ app = Flask(__name__)
 
 # Connect to the Redis container using service-name DNS (injected via docker-compose env)
 redis_client = redis.Redis(
-    host=os.getenv("REDIS_HOST", "redis"),
+    host=os.getenv("REDIS_HOST", "10.89.0.5"),
     port=int(os.getenv("REDIS_PORT", "6379")),
     db=int(os.getenv("REDIS_DB", "0")),
     decode_responses=True

@@ -112,13 +112,34 @@ useEffect(() => {
   // fetch radar stations from backend at /apis/stations
   useEffect(() => {
     async function loadStations() {
-      const response = await fetch(`${API_BASE}/stations`);
-      const stationJson = await response.json();
-      const nextStations = Array.isArray(stationJson?.features)
-        ? stationJson.features
-        : [];
-      setStations(nextStations);
+      const maxRetries = 10;
+
+      for (let attempt = 1; attempt <= maxRetries; attempt += 1) {
+        try {
+          const response = await fetch(`${API_BASE}/stations`);
+          if (!response.ok) {
+            throw new Error(`Station request failed with status ${response.status}`);
+          }
+
+          const stationJson = await response.json();
+          const nextStations = Array.isArray(stationJson?.features)
+            ? stationJson.features
+            : [];
+          setStations(nextStations);
+          return;
+        } catch (err) {
+          console.error(`Station load attempt ${attempt} failed:`, err);
+
+          if (attempt === maxRetries) {
+            return;
+          }
+
+          const delayMs = Math.min(1000 * 2 ** (attempt - 1), 10000);
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+        }
+      }
     }
+
     loadStations();
   }, []);
 
