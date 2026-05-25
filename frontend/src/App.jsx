@@ -17,16 +17,6 @@ import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { useEffect, useRef, useState } from "react";
 import LeafletMap from "./components/LeafletMap";
 import RadarStationDropdown from "./components/RadarStationDropdown";
-import { useState, useEffect, useRef } from 'react';
-import dayjs from './utils/dayjsConfig';
-
-// MUI
-import { LocalizationProvider, DateTimePicker } from '@mui/x-date-pickers';
-import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
-import PauseIcon from '@mui/icons-material/Pause';
-import { Slider, Button, Select, MenuItem, FormControl, InputLabel, Checkbox } from '@mui/material';
-
 import dayjs from "./utils/dayjsConfig";
 
 export default function App() {
@@ -106,10 +96,6 @@ export default function App() {
       setNumFrames(0);
       setFrames([]);
       const response = await fetch(`${API_BASE}/run`, {
-        method: 'POST',
-
-      // ---- make request ----
-      const response = await fetch("/apis/run", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -142,35 +128,13 @@ export default function App() {
   };
 
   // fetch frames once the job is completed and the jobId and numFrames are set
-useEffect(() => {
-  async function fetchFrames() {
-    if (jobStatus !== "COMPLETED" || !jobId || numFrames <= 0) return;
-    console.log(`attempting to fetch ${numFrames} frames for job ${jobId}`);
-    try {
-      const promises = Array.from({ length: numFrames }, (_, i) =>
-        fetch(`${API_BASE}/jobs/${jobId}/frames/${i}`)
-          .then(res => {
-            if (!res.ok) throw new Error(`Failed frame ${i}`);
-            return res.blob();
-          })
-          .then(blob => URL.createObjectURL(blob))
-      );
-      const urls = await Promise.all(promises);
-      setFrames(urls);
-      console.log("Frames fetched successfully: ", urls);
-    } catch (err) {
-      console.error("Error fetching frames:", err);
-    }
-  }
-  fetchFrames();
-}, [jobStatus, jobId, numFrames]);
   useEffect(() => {
     async function fetchFrames() {
       if (jobStatus !== "COMPLETED" || !jobId || numFrames <= 0) return;
       console.log(`attempting to fetch ${numFrames} frames for job ${jobId}`);
       try {
         const promises = Array.from({ length: numFrames }, async (_, i) => {
-          const res = await fetch(`/apis/jobs/${jobId}/frames/${i}`);
+          const res = await fetch(`${API_BASE}/jobs/${jobId}/frames/${i}`);
           if (res.status === 404) {
             console.warn(`Frame ${i} gave 404 - skipping`);
             return null;
