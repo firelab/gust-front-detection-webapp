@@ -90,8 +90,6 @@ class StationService:
             if not id_match:
                 # If no ID pattern is found, skip this entry
                 continue
-            
-            # If you have read this far, please audibly meow during the next group meeting :)
 
             station_id = id_match.group(1)
             # filter for NEXRAD stations only

@@ -100,9 +100,7 @@ class NfgdaRunner:
             if proc.returncode != 0:
                 if state["clean_shutdown"] and state["fatal_error_count"] == 0:
                     # the algorithm completed its work but the process exited
-                    # non-zero due to a benign Python shutdown error (e.g. the
-                    # ProcessPoolExecutor "Bad file descriptor" race condition).
-                    # treat this as a success so the pipeline can continue.
+                    # non-zero due to a Python shutdown error
                     logger.warning(
                         "NFGDA algorithm exited with code %d but reported a clean shutdown — treating as success",
                         proc.returncode,
@@ -183,13 +181,7 @@ class NfgdaRunner:
 
     @staticmethod
     async def monitored_stream(stream, label: str, proc, state: dict):
-        """ read logs, monitor for no data and fatal errors. Kill wonky processes
-
-        Args:
-            stream: asyncio subprocess stream (stdout or stderr).
-            no_data_polls: Kill the process after this many consecutive
-                               "no new scans found" messages.
-        """
+        """ read logs, monitor for no data and fatal errors. Kill wonky processes """
 
         no_data_polls = int(os.getenv("MAX_NO_DATA_POLLS", "10"))
 
