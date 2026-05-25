@@ -35,7 +35,7 @@ export default function App() {
   const playbackRef = useRef(null);
 
   // Endpoint for Server Deployment
-  const API_BASE = "/gust-front-detection/apis";
+  const API_BASE = (import.meta.env.VITE_API_BASE || "/apis").replace(/\/$/, "");
   
   // --------------------------------------- HANDLERS ----------------------------------------
 

@@ -1,4 +1,0 @@
-matlab
-nfgda
-python
-scripts

@@ -3,6 +3,7 @@ import shutil
 import asyncio
 import redis
 import logging
+from redis.exceptions import RedisError
 from datetime import datetime, timezone
 from nfgda_service import NfgdaService
 from process_output import generate_geotiff_output
@@ -13,7 +14,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-redis_client = redis.Redis(host=os.getenv("REDIS_HOST", "10.89.0.5"), port=int(os.getenv("REDIS_PORT", "6379")), db=int(os.getenv("REDIS_DB", "0")), decode_responses=True)
+redis_client = redis.Redis(
+    host=os.getenv("REDIS_HOST", "redis"),
+    port=int(os.getenv("REDIS_PORT", "6379")),
+    db=int(os.getenv("REDIS_DB", "0")),
+    decode_responses=True,
+    socket_connect_timeout=5,
+    socket_timeout=5,
+)
 
 # semaphor manages how many jobs can run at once
 job_semaphore = asyncio.Semaphore(int(os.getenv("MAX_CONCURRENT_JOBS", "2")))
@@ -29,18 +37,30 @@ async def listen_for_jobs() -> None:
     logger.info("listening for jobs (max %d concurrent)", int(os.getenv("MAX_CONCURRENT_JOBS", "2")))
 
     loop = asyncio.get_running_loop()
+    await wait_for_redis(loop)
 
     while True:
         # periodic cleanup of expired job assets
-        await loop.run_in_executor(None, cleanup_expired_jobs)
+        try:
+            await loop.run_in_executor(None, cleanup_expired_jobs)
+        except RedisError as exc:
+            logger.warning("Redis unavailable during cleanup: %s", exc)
+            await asyncio.sleep(5)
+            continue
 
         # wait until there's capacity to process a job
         await job_semaphore.acquire()
 
         # dequeue with a timeout, run cleanup when idle
-        result = await loop.run_in_executor(
-            None, lambda: redis_client.brpop("job_queue", timeout=10)
-        )
+        try:
+            result = await loop.run_in_executor(
+                None, lambda: redis_client.brpop("job_queue", timeout=10)
+            )
+        except RedisError as exc:
+            job_semaphore.release()
+            logger.warning("Redis unavailable while waiting for jobs: %s", exc)
+            await asyncio.sleep(5)
+            continue
 
         if result is None:
             job_semaphore.release()
@@ -51,6 +71,23 @@ async def listen_for_jobs() -> None:
 
         # run that job and release the semaphore when done
         asyncio.create_task(run_and_release_job(job_id))
+
+
+async def wait_for_redis(loop: asyncio.AbstractEventLoop) -> None:
+    """Wait until Redis accepts commands before starting the worker loop."""
+    while True:
+        try:
+            await loop.run_in_executor(None, redis_client.ping)
+            redis_kwargs = redis_client.connection_pool.connection_kwargs
+            logger.info(
+                "connected to Redis at %s:%s",
+                redis_kwargs.get("host"),
+                redis_kwargs.get("port"),
+            )
+            return
+        except RedisError as exc:
+            logger.warning("waiting for Redis: %s", exc)
+            await asyncio.sleep(5)
 
 async def process_job(job_id: str) -> None:
     """Process a single job after being acquired from the queue."""

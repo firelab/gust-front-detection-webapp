@@ -1,6 +1,9 @@
 FROM node:20
 WORKDIR /app
 
+ARG VITE_API_BASE=/apis
+ENV VITE_API_BASE=$VITE_API_BASE
+
 # Copy and install dependencies
 COPY package*.json ./
 RUN npm install
