@@ -1,23 +1,23 @@
 import FormControl from "@mui/material/FormControl";
 import InputLabel from "@mui/material/InputLabel";
-import Select from "@mui/material/Select";
 import MenuItem from "@mui/material/MenuItem";
+import Select from "@mui/material/Select";
 
 export default function RadarStationDropdown({
   stations = [],
   selectedStation,
-  setSelectedStation
+  setSelectedStation,
 }) {
-  const stationsArr = Array.isArray(stations) ? stations : []
+  const stationsArr = Array.isArray(stations) ? stations : [];
 
   function handleChange(event) {
-    const stationID = event.target.value
+    const stationID = event.target.value;
 
     const stationObj = stationsArr.find(
-      s => s?.properties?.station_id === stationID
-    )
+      (s) => s?.properties?.station_id === stationID,
+    );
 
-    setSelectedStation(stationObj || null)
+    setSelectedStation(stationObj || null);
   }
 
   const stationID = selectedStation?.properties?.station_id || "";
@@ -31,7 +31,6 @@ export default function RadarStationDropdown({
         label="Select a station"
         onChange={handleChange}
       >
-        
         {stationsArr.map((feature) => {
           const props = feature?.properties;
           const stationId = props?.station_id ?? "";

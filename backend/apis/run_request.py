@@ -86,10 +86,6 @@ def validate_time_parameters(request_fields: dict):
     except ValueError:
         return jsonify({"error": "Invalid datetime format. Expected ISO 8601: YYYY-MM-DDTHH:MM:SSZ"})
 
-    # startUtc must be within the last 2 hours
-    if start_utc < now - timedelta(minutes=120):
-        return jsonify({"error": "startUtc must be within the last 2 hours"})
-
     # endUtc must be after startUtc
     if end_utc <= start_utc:
         return jsonify({"error": "endUtc must be after startUtc"})

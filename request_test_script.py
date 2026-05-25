@@ -112,7 +112,9 @@ def main():
         print(f"\n  GET {url}")
         resp = requests.get(url)
         if resp.status_code == 200:
-            print(f"    ✓ frame {index}: {resp.status_code} ({len(resp.content)} bytes)")
+            ts = resp.headers.get("X-Frame-Timestamp", "no timestamp")
+            is_forecast = resp.headers.get("X-Frame-Is-Forecast", "unknown")
+            print(f"    ✓ frame {index}: {resp.status_code} ({len(resp.content)} bytes)  timestamp={ts}  forecast={is_forecast}")
         else:
             print(f"    ✗ frame {index}: {resp.status_code} — {resp.text[:200]}")
 
