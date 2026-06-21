@@ -21,6 +21,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt /app/requirements.txt
 
 # Pin Python GDAL to the system GDAL version reported by gdal-config
+# This prevents pip from upgrading/downgrading Python GDAL away from the
+# version matching the system GDAL library installed by apt.
 RUN echo "GDAL==$(gdal-config --version)" > /tmp/constraints.txt && \
     pip install --no-cache-dir -c /tmp/constraints.txt --no-binary=GDAL GDAL==$(gdal-config --version) && \
     pip install --no-cache-dir -c /tmp/constraints.txt -r requirements.txt
