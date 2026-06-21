@@ -17,13 +17,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgdal-dev \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir GDAL==$(gdal-config --version)
+# Copy requirements first so Docker can cache dependency installs
 COPY requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+
+# Pin Python GDAL to the system GDAL version reported by gdal-config
+RUN echo "GDAL==$(gdal-config --version)" > /tmp/constraints.txt && \
+    pip install --no-cache-dir -c /tmp/constraints.txt --no-binary=GDAL GDAL==$(gdal-config --version) && \
+    pip install --no-cache-dir -c /tmp/constraints.txt -r requirements.txt
 
 COPY . /app
 
-# algorithm modules (nfgda/, python/, scripts/) now live under /app/algorithm
 ENV PYTHONPATH="/app/algorithm"
 
 CMD ["python", "main.py"]
