@@ -34,6 +34,16 @@ def send_job_to_redis_queue(redis_client, request_fields: dict):
     except ValueError:
         return jsonify({"error": f"Invalid station ID: {station_id}"}), 400
     
+    # ------------------------------------------------------------------ #
+    # Station-level cooldown check                                         #
+    # If a job (any status) was created for this station within the        #
+    # cooldown window, return it immediately — no new job is created.      #
+    # Manual requests NEVER retry within the window, even for FAILED jobs. #
+    # ------------------------------------------------------------------ #
+    cooldown_response = check_station_cooldown(redis_client, station_id)
+    if cooldown_response is not None:
+        return cooldown_response
+
     # validate and/or set default timebox parameters
     validation_error = validate_time_parameters(request_fields)
     if validation_error:
@@ -49,7 +59,8 @@ def send_job_to_redis_queue(redis_client, request_fields: dict):
     # add job to redis
     job_key = f"job:{job_id}"
     expiry_minutes = int(os.getenv("FILE_EXPIRATION_TIME", "1440"))
-    expiry_timestamp = (datetime.now(timezone.utc) + timedelta(minutes=expiry_minutes)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    now = datetime.now(timezone.utc)
+    expiry_timestamp = (now + timedelta(minutes=expiry_minutes)).strftime("%Y-%m-%dT%H:%M:%SZ")
     redis_client.hset(job_key, mapping={
         "stationId": request_fields["stationId"],
         "startUtc": request_fields["startUtc"],
@@ -61,8 +72,68 @@ def send_job_to_redis_queue(redis_client, request_fields: dict):
     # push job id to job queue
     redis_client.lpush("job_queue", job_id)
 
+    # write station:latest so subsequent requests within the cooldown window
+    # return this job instead of creating another one
+    _write_station_latest(redis_client, station_id, job_id, source="manual")
+
     # the cat's meow
     return jsonify({"job_id": job_id}), 202
+
+
+def check_station_cooldown(redis_client, station_id: str):
+    """Check station:latest:<station_id> for a recent job within the cooldown window.
+
+    Returns a Flask response if the caller should short-circuit, or None if job
+    creation should proceed normally.
+
+    The cooldown is absolute for manual requests: any status (COMPLETED, PROCESSING,
+    PENDING, or FAILED) within the window causes the existing job_id to be returned.
+    """
+    cooldown_minutes = int(os.getenv("STATION_JOB_COOLDOWN_MINUTES", "15"))
+    latest_key = f"station:latest:{station_id}"
+    latest = redis_client.hgetall(latest_key)
+
+    if not latest:
+        return None
+
+    created_at_str = latest.get("created_at", "")
+    if not created_at_str:
+        return None
+
+    try:
+        created_at = datetime.strptime(created_at_str, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+
+    now = datetime.now(timezone.utc)
+    if now - created_at >= timedelta(minutes=cooldown_minutes):
+        # Cooldown window has expired — allow a new job
+        return None
+
+    # Within the cooldown window: return the existing job regardless of status
+    job_id = latest.get("job_id", "")
+    status = latest.get("status", "")
+    source = latest.get("source", "manual")
+
+    http_status = 200 if status in ("COMPLETED", "FAILED") else 202
+    return jsonify({
+        "job_id": job_id,
+        "status": status,
+        "source": source,
+        "cached": True,
+    }), http_status
+
+
+def _write_station_latest(redis_client, station_id: str, job_id: str, source: str = "manual"):
+    """Write or overwrite station:latest:<station_id> with the new job's initial state."""
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    redis_client.hset(f"station:latest:{station_id}", mapping={
+        "job_id": job_id,
+        "created_at": now,
+        "status": "PENDING",
+        "source": source,
+        "num_frames": "",
+    })
 
 
 def validate_time_parameters(request_fields: dict):

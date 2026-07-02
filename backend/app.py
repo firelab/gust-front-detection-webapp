@@ -1,9 +1,10 @@
 import redis
 from flask import Flask, jsonify, request
-from apis.stations import list_stations_api
-from apis.run_request import send_job_to_redis_queue
-from apis.status import get_job_status
-from apis.retrieve_frames import get_frame
+from backend.apis.stations import list_stations_api
+from backend.apis.run_request import send_job_to_redis_queue
+from backend.apis.status import get_job_status
+from backend.apis.retrieve_frames import get_frame
+from backend.apis.auto_refresh import enable_auto_refresh, disable_auto_refresh, get_auto_refresh_status
 
 app = Flask(__name__)
 
@@ -50,6 +51,25 @@ def status_endpoint():
     if not job_id:
         return jsonify({"error": "Missing job ID"}), 400
     return get_job_status(redis_client, job_id)
+
+
+# Auto-Refresh Toggle API
+@app.route("/apis/auto-refresh/<station_id>", methods=["POST"])
+def enable_auto_refresh_endpoint(station_id):
+    """Enable continuous auto-refresh for a station. Idempotent."""
+    return enable_auto_refresh(redis_client, station_id)
+
+
+@app.route("/apis/auto-refresh/<station_id>", methods=["DELETE"])
+def disable_auto_refresh_endpoint(station_id):
+    """Disable auto-refresh for a station. Idempotent."""
+    return disable_auto_refresh(redis_client, station_id)
+
+
+@app.route("/apis/auto-refresh/<station_id>", methods=["GET"])
+def get_auto_refresh_status_endpoint(station_id):
+    """Return the current auto-refresh state and latest job ID for a station."""
+    return get_auto_refresh_status(redis_client, station_id)
 
 
 if __name__ == '__main__':
