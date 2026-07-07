@@ -1,6 +1,6 @@
 
 from flask import jsonify
-from backend.src.station_service.station_service import StationService
+from ..src.station_service.station_service import StationService
 
 
 def _autorefresh_key(station_id: str) -> str:

@@ -1,6 +1,6 @@
 import os
 import logging
-from nfgda_runner import NfgdaRunner
+from .nfgda_runner import NfgdaRunner
 
 logger = logging.getLogger(__name__)
 
@@ -43,5 +43,5 @@ class NfgdaService:
                 logger.warning("error message: %s", message)
 
         except Exception as e:
-            self.redis_client.hset(self.job_key, mapping={"status": "FAILED"})
+            self.redis_client.hset(self.job_key, mapping={"status": "FAILED", "error_message": str(e)})
             logger.exception("job %s failed with exception: %s", self.job_id, e)

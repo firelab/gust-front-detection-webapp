@@ -3,6 +3,7 @@ import os
 import uuid
 from datetime import datetime, timedelta, timezone
 from flask import jsonify
+from ..src.station_service.station_service import StationService
 
 def send_job_to_redis_queue(redis_client, request_fields: dict):
     """
@@ -27,19 +28,13 @@ def send_job_to_redis_queue(redis_client, request_fields: dict):
     station_id = request_fields.get("stationId")
     if not station_id:
         return jsonify({"error": "Missing stationId request field"}), 400
-
-    from src.station_service.station_service import StationService
+    
     try:
         StationService(redis_client).get_station(station_id)
     except ValueError:
         return jsonify({"error": f"Invalid station ID: {station_id}"}), 400
     
-    # ------------------------------------------------------------------ #
-    # Station-level cooldown check                                         #
-    # If a job (any status) was created for this station within the        #
-    # cooldown window, return it immediately — no new job is created.      #
-    # Manual requests NEVER retry within the window, even for FAILED jobs. #
-    # ------------------------------------------------------------------ #
+    # Station-level cooldown check
     cooldown_response = check_station_cooldown(redis_client, station_id)
     if cooldown_response is not None:
         return cooldown_response
@@ -107,7 +102,7 @@ def check_station_cooldown(redis_client, station_id: str):
 
     now = datetime.now(timezone.utc)
     if now - created_at >= timedelta(minutes=cooldown_minutes):
-        # Cooldown window has expired — allow a new job
+        # Cooldown window has expired -> allow a new job for the given time/station pair
         return None
 
     # Within the cooldown window: return the existing job regardless of status

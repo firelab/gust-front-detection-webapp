@@ -217,8 +217,17 @@ class NfgdaRunner:
                 if "shutdown complete" in text:
                     state["clean_shutdown"] = True
 
-                if "fatal error" in text.lower():
+                if "fatal error" in text.lower() or "BrokenProcessPool" in text:
                     state["fatal_error_count"] += 1
+
+                # A BrokenProcessPool is unrecoverable, the algorithm cannot
+                # download any further scans
+                if "BrokenProcessPool" in text and proc.returncode is None:
+                    logger.error(
+                        "BrokenProcessPool detected in NFGDA_Host stderr — killing process"
+                    )
+                    proc.kill()
+                    return
 
     
 

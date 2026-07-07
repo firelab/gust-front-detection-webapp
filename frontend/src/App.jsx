@@ -200,12 +200,18 @@ export default function App() {
     const intervalId = setInterval(async () => {
       try {
         const response = await fetch(`/apis/status?job_id=${jobId}`);
+        if (!response.ok) {
+          // Job not found (404) or other server error — stop polling and show error
+          const errorData = await response.json().catch(() => ({}));
+          setErrorMessage(errorData.error || `Status check failed (HTTP ${response.status})`);
+          setJobStatus("FAILED");
+          return;
+        }
         const data = await response.json();
         console.log(data);
         setJobStatus(data.status);
-        if (data.error) {
+        if (data.error_message) {
           setErrorMessage(data.error_message);
-          console.log("here");
         } else {
           setErrorMessage("");
         }
