@@ -21,12 +21,39 @@ class NfgdaRunner:
             out_dir (str): The output directory.
             """
 
-        self.algo_timeout_seconds = 600
         self.station_id = station_id
         self.start_utc = start_utc
         self.end_utc = end_utc
         self.job_id = job_id
         self.out_dir = out_dir
+        self.algo_timeout_seconds = self._compute_timeout(start_utc, end_utc)
+
+    @staticmethod
+    def _compute_timeout(start_utc: str, end_utc: str) -> int:
+        """Return a process timeout scaled to the timebox length.
+
+        The timeout is purely a safety net against runaway or hung processes.
+        No-data failures are handled separately via MAX_NO_DATA_POLLS.
+
+        Formula: ALGO_BASE_TIMEOUT_SECONDS + timebox_minutes * ALGO_TIMEOUT_SECONDS_PER_TIMEBOX_MINUTE
+
+        Environment variables:
+            ALGO_BASE_TIMEOUT_SECONDS (default 300): Fixed overhead budget (startup, I/O, etc.).
+            ALGO_TIMEOUT_SECONDS_PER_TIMEBOX_MINUTE (default 20): Extra seconds budgeted per
+                minute of timebox duration — accounts for downloading and processing each scan.
+        """
+        base = int(os.getenv("ALGO_BASE_TIMEOUT_SECONDS", "300"))
+        per_minute = int(os.getenv("ALGO_TIMEOUT_SECONDS_PER_TIMEBOX_MINUTE", "20"))
+
+        try:
+            start = datetime.strptime(start_utc, "%Y-%m-%dT%H:%M:%SZ")
+            end = datetime.strptime(end_utc, "%Y-%m-%dT%H:%M:%SZ")
+            timebox_minutes = (end - start).total_seconds() / 60
+        except ValueError:
+            logger.warning("could not parse timebox for timeout calculation, falling back to base timeout")
+            timebox_minutes = 0
+
+        return int(base + timebox_minutes * per_minute)
 
     async def run(self):
         """
@@ -34,8 +61,10 @@ class NfgdaRunner:
         Stdout and stderr are streamed line-by-line in real time so logs appear immediately in
         "docker compose logs -f".
 
-        If the algorithm polls for NEXRAD data and finds nothing for MAX_NO_DATA_POLLS consecutive cycles 
-        it is killed early so that the job slot is freed and the failure is reported.
+        The algo_timeout_seconds is a runaway-process safety net only — it scales with the
+        timebox length so that larger data windows get proportionally more time to complete.
+        If the algorithm polls for NEXRAD data and finds nothing for MAX_NO_DATA_POLLS consecutive
+        cycles it is killed early so that the job slot is freed and the failure is reported.
 
         Returns:
             bool: True if the NFGDA process completed successfully, False otherwise.
@@ -44,7 +73,10 @@ class NfgdaRunner:
         # get the number of consecutive no data polls to allow before killing the process
         no_data_polls = int(os.getenv("MAX_NO_DATA_POLLS", "10"))
 
-        logger.info(f"timebox parameters set to start_utc: {self.start_utc}, end_utc: {self.end_utc}")
+        logger.info(
+            "timebox: start_utc=%s end_utc=%s | timeout=%ds",
+            self.start_utc, self.end_utc, self.algo_timeout_seconds,
+        )
         
         # create a temporary config file for the algorithm
         config_path = self.create_temp_config(self.out_dir)

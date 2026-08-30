@@ -7,8 +7,8 @@ import uuid
 import nexradaws
 from datetime import datetime, timedelta, timezone
 
-from .nfgda_service import NfgdaService
-from .process_output import generate_geotiff_output
+from nfgda_service import NfgdaService
+from process_output import generate_geotiff_output
 
 logging.basicConfig(
     level=logging.INFO,

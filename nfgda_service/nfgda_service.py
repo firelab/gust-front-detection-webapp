@@ -1,6 +1,6 @@
 import os
 import logging
-from .nfgda_runner import NfgdaRunner
+from nfgda_runner import NfgdaRunner
 
 logger = logging.getLogger(__name__)
 

@@ -1,10 +1,10 @@
 import redis
 from flask import Flask, jsonify, request
-from .apis.stations import list_stations_api
-from .apis.run_request import send_job_to_redis_queue
-from .apis.status import get_job_status
-from .apis.retrieve_frames import get_frame
-from .apis.auto_refresh import enable_auto_refresh, disable_auto_refresh, get_auto_refresh_status
+from apis.stations import list_stations_api
+from apis.run_request import send_job_to_redis_queue
+from apis.status import get_job_status
+from apis.retrieve_frames import get_frame
+from apis.auto_refresh import enable_auto_refresh, disable_auto_refresh, get_auto_refresh_status
 
 app = Flask(__name__)
 
