@@ -39,11 +39,11 @@ class NfgdaRunner:
 
         Environment variables:
             ALGO_BASE_TIMEOUT_SECONDS (default 300): Fixed overhead budget (startup, I/O, etc.).
-            ALGO_TIMEOUT_SECONDS_PER_TIMEBOX_MINUTE (default 20): Extra seconds budgeted per
+            ALGO_TIMEOUT_MINUTE_BUFF (default 20): Extra seconds budgeted per
                 minute of timebox duration — accounts for downloading and processing each scan.
         """
         base = int(os.getenv("ALGO_BASE_TIMEOUT_SECONDS", "300"))
-        per_minute = int(os.getenv("ALGO_TIMEOUT_SECONDS_PER_TIMEBOX_MINUTE", "20"))
+        per_minute = int(os.getenv("ALGO_TIMEOUT_MINUTE_BUFF", "20"))
 
         try:
             start = datetime.strptime(start_utc, "%Y-%m-%dT%H:%M:%SZ")
