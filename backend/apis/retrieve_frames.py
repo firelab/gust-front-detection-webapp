@@ -1,7 +1,8 @@
 
-import os
 import json
-from flask import send_file, abort, make_response
+import os
+
+from flask import abort, make_response, send_file
 
 
 def get_frame(job_id: str, index: int):
@@ -48,7 +49,7 @@ def get_frame_manifest_entry(job_dir: str, index: int) -> dict | None:
             with open(manifest_path) as f:
                 manifest = json.load(f)
             return manifest.get(str(index))
-        except Exception:
+        except (OSError, json.JSONDecodeError):
             return None
 
     return None

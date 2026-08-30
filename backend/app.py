@@ -1,9 +1,17 @@
+import os
+
 import redis
-from flask import Flask, jsonify, request
-from apis.stations import list_stations_api
-from apis.run_request import send_job_to_redis_queue
-from apis.status import get_job_status
+from apis.auto_refresh import (
+    disable_auto_refresh,
+    enable_auto_refresh,
+    get_auto_refresh_status,
+    list_auto_refresh_statuses,
+)
 from apis.retrieve_frames import get_frame
+from apis.run_request import get_station_latest_job, send_job_to_redis_queue
+from apis.stations import list_stations_api
+from apis.status import get_job_status
+from flask import Flask, jsonify, request
 
 app = Flask(__name__)
 
@@ -52,6 +60,59 @@ def status_endpoint():
     return get_job_status(redis_client, job_id)
 
 
+@app.route("/apis/stations/<station_id>/latest-job", methods=["GET"])
+def get_station_latest_job_endpoint(station_id):
+    """Return the most recent job for a station without creating a new one."""
+    return get_station_latest_job(redis_client, station_id)
+
+
+# Auto-Refresh Toggle API
+@app.route("/apis/auto-refresh", methods=["GET"])
+def list_auto_refresh_statuses_endpoint():
+    """Return all stations with auto-refresh currently enabled."""
+    return list_auto_refresh_statuses(redis_client)
+
+
+@app.route("/apis/auto-refresh/<station_id>", methods=["POST"])
+def enable_auto_refresh_endpoint(station_id):
+    """Enable continuous auto-refresh for a station for a duration in minutes."""
+    try:
+        duration_minutes = int(request.args.get("duration", "1440"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Improper Duration Input"}), 400
+
+    if duration_minutes <= 0:
+        return jsonify({"error": "Auto-refresh duration must be positive"}), 400
+
+    try:
+        max_duration_minutes = int(os.getenv("MAX_AUTO_REFRESH_DURATION") or "10080")
+    except ValueError:
+        return jsonify({"error": "Invalid MAX_AUTO_REFRESH_DURATION config"}), 500
+
+    if duration_minutes > max_duration_minutes:
+        return jsonify({
+            "error": "requested auto-refresh duration exceeds maximum allowed (7 days)"
+        }), 400
+
+    return enable_auto_refresh(
+        redis_client,
+        station_id,
+        duration_minutes,
+        request.args.get("job_id", ""),
+    )
+
+
+@app.route("/apis/auto-refresh/<station_id>", methods=["DELETE"])
+def disable_auto_refresh_endpoint(station_id):
+    """Disable auto-refresh for a station. Idempotent."""
+    return disable_auto_refresh(redis_client, station_id)
+
+
+@app.route("/apis/auto-refresh/<station_id>", methods=["GET"])
+def get_auto_refresh_status_endpoint(station_id):
+    """Return the current auto-refresh state and latest job ID for a station."""
+    return get_auto_refresh_status(redis_client, station_id)
+
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=8001)
-

@@ -2,7 +2,10 @@
 import os
 import uuid
 from datetime import datetime, timedelta, timezone
+
 from flask import jsonify
+from src.station_service.station_service import StationService
+
 
 def send_job_to_redis_queue(redis_client, request_fields: dict):
     """
@@ -27,13 +30,23 @@ def send_job_to_redis_queue(redis_client, request_fields: dict):
     station_id = request_fields.get("stationId")
     if not station_id:
         return jsonify({"error": "Missing stationId request field"}), 400
-
-    from src.station_service.station_service import StationService
+    station_id = station_id.upper().strip()
+    request_fields["stationId"] = station_id
+    
     try:
         StationService(redis_client).get_station(station_id)
     except ValueError:
         return jsonify({"error": f"Invalid station ID: {station_id}"}), 400
+
+    auto_refresh_response = get_auto_refresh_latest_job(redis_client, station_id)
+    if auto_refresh_response is not None:
+        return auto_refresh_response
     
+    # Station-level cooldown check
+    cooldown_response = check_station_cooldown(redis_client, station_id)
+    if cooldown_response is not None:
+        return cooldown_response
+
     # validate and/or set default timebox parameters
     validation_error = validate_time_parameters(request_fields)
     if validation_error:
@@ -49,7 +62,8 @@ def send_job_to_redis_queue(redis_client, request_fields: dict):
     # add job to redis
     job_key = f"job:{job_id}"
     expiry_minutes = int(os.getenv("FILE_EXPIRATION_TIME", "1440"))
-    expiry_timestamp = (datetime.now(timezone.utc) + timedelta(minutes=expiry_minutes)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    now = datetime.now(timezone.utc)
+    expiry_timestamp = (now + timedelta(minutes=expiry_minutes)).strftime("%Y-%m-%dT%H:%M:%SZ")
     redis_client.hset(job_key, mapping={
         "stationId": request_fields["stationId"],
         "startUtc": request_fields["startUtc"],
@@ -61,8 +75,140 @@ def send_job_to_redis_queue(redis_client, request_fields: dict):
     # push job id to job queue
     redis_client.lpush("job_queue", job_id)
 
-    # the cat's meow
+    # write station:latest so subsequent requests within the cooldown window
+    # return this job instead of creating another one
+    _write_station_latest(redis_client, station_id, job_id, source="manual")
+
     return jsonify({"job_id": job_id}), 202
+
+
+def get_auto_refresh_latest_job(redis_client, station_id: str):
+    """Return the station's latest job when auto-refresh is enabled."""
+    auto_refresh_fields = redis_client.hgetall(f"autorefresh:{station_id}")
+    if auto_refresh_fields.get("refresh_enabled") != "true":
+        return None
+
+    latest_response = build_latest_job_response(
+        redis_client,
+        station_id,
+        source=auto_refresh_fields.get("source", "auto_refresh"),
+    )
+    if latest_response is not None:
+        return latest_response
+
+    current_job_id = auto_refresh_fields.get("current_job_id", "")
+    if not current_job_id:
+        return None
+
+    return build_job_response(
+        redis_client,
+        current_job_id,
+        source="auto_refresh",
+        cached=True,
+    )
+
+
+def get_station_latest_job(redis_client, station_id: str):
+    """Return the most recent job for a station without creating a new one."""
+    station_id = station_id.upper().strip()
+
+    try:
+        StationService(redis_client).get_station(station_id)
+    except ValueError:
+        return jsonify({"error": f"Invalid station ID: {station_id}"}), 400
+
+    latest = redis_client.hgetall(f"station:latest:{station_id}")
+    response = build_latest_job_response(
+        redis_client,
+        station_id,
+        source=latest.get("source", "manual"),
+    )
+    if response is None:
+        return jsonify({"error": f"No recent job found for station {station_id}"}), 404
+
+    return response
+
+
+def check_station_cooldown(redis_client, station_id: str):
+    """Check station:latest:<station_id> for a recent job within the cooldown window.
+
+    Returns a Flask response if the caller should short-circuit, or None if job
+    creation should proceed normally.
+
+    The cooldown is absolute for manual requests: any status (COMPLETED, PROCESSING,
+    PENDING, or FAILED) within the window causes the existing job_id to be returned.
+    """
+    cooldown_minutes = int(os.getenv("STATION_JOB_COOLDOWN_MINUTES", "15"))
+    latest_key = f"station:latest:{station_id}"
+    latest = redis_client.hgetall(latest_key)
+
+    if not latest:
+        return None
+
+    created_at_str = latest.get("created_at", "")
+    if not created_at_str:
+        return None
+
+    try:
+        created_at = datetime.strptime(created_at_str, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+
+    now = datetime.now(timezone.utc)
+    if now - created_at >= timedelta(minutes=cooldown_minutes):
+        # Cooldown window has expired -> allow a new job for the given time/station pair
+        return None
+
+    # Within the cooldown window: return the existing job regardless of status
+    return build_latest_job_response(
+        redis_client,
+        station_id,
+        source=latest.get("source", "manual"),
+    )
+
+
+def build_latest_job_response(redis_client, station_id: str, source: str):
+    """Build a response for station:latest:<station_id>, if it points to a job."""
+    latest = redis_client.hgetall(f"station:latest:{station_id}")
+    job_id = latest.get("job_id", "")
+    if not job_id:
+        return None
+
+    return build_job_response(redis_client, job_id, source=source, cached=True)
+
+
+def build_job_response(
+    redis_client,
+    job_id: str,
+    source: str,
+    cached: bool,
+):
+    """Build a run endpoint response for an existing job."""
+    job_fields = redis_client.hgetall(f"job:{job_id}")
+    if not job_fields:
+        return None
+
+    status = job_fields.get("status", "")
+    http_status = 200 if status in ("COMPLETED", "FAILED") else 202
+    return jsonify({
+        "job_id": job_id,
+        "status": status,
+        "source": source,
+        "cached": cached,
+        "num_frames": job_fields.get("num_frames", ""),
+    }), http_status
+
+
+def _write_station_latest(redis_client, station_id: str, job_id: str, source: str = "manual"):
+    """Write or overwrite station:latest:<station_id> with the new job's initial state."""
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    redis_client.hset(f"station:latest:{station_id}", mapping={
+        "job_id": job_id,
+        "created_at": now,
+        "status": "PENDING",
+        "source": source,
+        "num_frames": "",
+    })
 
 
 def validate_time_parameters(request_fields: dict):

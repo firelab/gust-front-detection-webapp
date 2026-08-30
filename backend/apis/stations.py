@@ -2,6 +2,7 @@ from flask import jsonify
 from geojson import FeatureCollection
 from src.station_service.station_service import StationService
 
+
 def list_stations_api(redis_client):
     """ Returns every available radar station and its coordinates. """
 

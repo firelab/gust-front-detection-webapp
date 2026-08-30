@@ -27,7 +27,7 @@ export default function LeafletMap({
   setSelectedStation,
   frames = [],
   currentFrameIndex,
-  opacity
+  opacity,
 }) {
   const [map, setMap] = useState(null);
   const [mapLatLng, setMapLatLng] = useState({ lat: 40.0, lng: -98.0 });
@@ -40,7 +40,7 @@ export default function LeafletMap({
   }, [selectedStation, map]);
 
   return (
-    <div className="h-[600px] md:h-screen">
+    <div className="relative h-[600px] md:h-screen">
       {map && (
         <DisplayPosition
           map={map}
@@ -91,6 +91,28 @@ export default function LeafletMap({
         })}
         <GeoTiffAnimation frames={frames} currentIndex={currentFrameIndex} opacity={opacity} />
       </MapContainer>
+      {frames.length > 0 && (
+        <div className="absolute bottom-4 left-4 z-[1000] bg-white/95 outline-1 outline-gray-300 rounded-md p-4 shadow-lg md:bottom-36">
+          <p className="text-base font-bold pb-2">Legend</p>
+          <div className="flex items-center mb-2">
+            <div className="rounded-full shadow-md bg-red-500 w-10 h-4 mr-3"></div>
+            <p>Detected Gust Fronts</p>
+          </div>
+          <p className="font-bold mb-2">Forecasted Gust Front Probability</p>
+          <div className="flex items-center mb-2">
+            <div className="rounded-full shadow-md bg-amber-500 w-10 h-4 mr-3"></div>
+            <p>{"> 30% Confidence"}</p>
+          </div>
+          <div className="flex items-center mb-2">
+            <div className="rounded-full shadow-md bg-cyan-300 w-10 h-4 mr-3"></div>
+            <p>{"> 50% Confidence"}</p>
+          </div>
+          <div className="flex items-center">
+            <div className="rounded-full shadow-md bg-purple-700 w-10 h-4 mr-3"></div>
+            <p>{"> 75% Confidence"}</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

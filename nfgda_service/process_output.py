@@ -3,16 +3,16 @@ into a stack of GeoTIFFs for final display on the frontend.
 
 Based on the projectRadarData.py script provided by Natalie. """
 
-import numpy as np
-import matplotlib.colors as mcolors
-from osgeo import gdal, osr
-from scipy.ndimage import binary_dilation
-from skimage.morphology import skeletonize, disk
-
-import os
-import redis
 import json
 import logging
+import os
+
+import matplotlib.colors as mcolors
+import numpy as np
+import redis
+from osgeo import gdal, osr
+from scipy.ndimage import binary_dilation
+from skimage.morphology import disk, skeletonize
 
 logger = logging.getLogger(__name__)
 
@@ -144,8 +144,8 @@ def generate_geotiff_output(job_id: str, redis_client: redis.Redis):
             last_det_entry = manifest[max(manifest.keys())]
             try:
                 last_det_ts = np.datetime64(last_det_entry["timestamp"].rstrip("Z"), "s")
-            except Exception:
-                pass
+            except (KeyError, TypeError, ValueError):
+                logger.warning("Could not parse last detection timestamp")
 
         if last_det_ts is not None:
             window_end = last_det_ts + np.timedelta64(3600, "s")  # +1 hour
@@ -159,7 +159,8 @@ def generate_geotiff_output(job_id: str, redis_client: redis.Redis):
                     continue
                 try:
                     fc_ts = np.datetime64(ts_str.rstrip("Z"), "s")
-                except Exception:
+                except (TypeError, ValueError):
+                    logger.warning("Could not parse forecast timestamp from %s", npz_path)
                     continue
                 if last_det_ts <= fc_ts <= window_end:
                     forecast_files.append(fname)
@@ -288,8 +289,8 @@ def extract_timestamp(npz_path: str) -> str | None:
         ts = data["timestamp"]
         ts_dt = ts.astype("datetime64[s]").item()
         return ts_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
-    except Exception as e:
-        logger.warning(f"Could not extract timestamp from {npz_path}: {e}")
+    except (OSError, TypeError, ValueError) as e:
+        logger.warning("Could not extract timestamp from %s: %s", npz_path, e)
         return None
 
 
@@ -346,7 +347,7 @@ def project_data(npz_path: str, radar_lat: float, radar_lon: float,
     # load data
     data = np.load(npz_path)
     array = data['inputNF']
-    nfout = data['nfout'] if 'nfout' in data else None
+    nfout = data.get('nfout', None)
 
     # flip vertically
     array = np.flipud(array)
@@ -354,8 +355,6 @@ def project_data(npz_path: str, radar_lat: float, radar_lon: float,
         nfout = np.flipud(nfout)
 
     refl = array[:, :, channel_index].astype(np.float64)
-    ny, nx = refl.shape
-
     # log data range for debugging
     valid_mask = ~np.isnan(refl)
     nan_count = np.count_nonzero(~valid_mask)
@@ -397,8 +396,12 @@ def project_forecast(npz_path: str, radar_lat: float, radar_lon: float,
             bg_refl = bg_array[:, :, 1].astype(np.float64)  # channel 1 = reflectivity
             rgba = _reflectivity_to_rgba(bg_refl, nfout=None)
             logger.info(f"Forecast frame {index}: using frozen reflectivity background")
-        except Exception as e:
-            logger.warning(f"Could not load background reflectivity from {background_det_npz}: {e}")
+        except (OSError, KeyError, TypeError, ValueError) as e:
+            logger.warning(
+                "Could not load background reflectivity from %s: %s",
+                background_det_npz,
+                e,
+            )
             rgba = np.zeros((ny, nx, 4), dtype=np.uint8)
     else:
         logger.warning(f"Forecast frame {index}: no background detection npz provided, using transparent background")
