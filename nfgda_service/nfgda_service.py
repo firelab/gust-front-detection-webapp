@@ -45,4 +45,4 @@ class NfgdaService:
 
         except Exception as e:
             self.redis_client.hset(self.job_key, mapping={"status": "FAILED", "error_message": str(e)})
-            logger.exception("job %s failed with exception: %s", self.job_id, e)
+            logger.exception("job %s failed with exception", self.job_id)

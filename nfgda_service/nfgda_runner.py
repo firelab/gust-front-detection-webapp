@@ -46,8 +46,12 @@ class NfgdaRunner:
         per_minute = int(os.getenv("ALGO_TIMEOUT_MINUTE_BUFF", "20"))
 
         try:
-            start = datetime.strptime(start_utc, "%Y-%m-%dT%H:%M:%SZ")
-            end = datetime.strptime(end_utc, "%Y-%m-%dT%H:%M:%SZ")
+            start = datetime.strptime(
+                start_utc, "%Y-%m-%dT%H:%M:%SZ"
+            ).replace(tzinfo=timezone.utc)
+            end = datetime.strptime(
+                end_utc, "%Y-%m-%dT%H:%M:%SZ"
+            ).replace(tzinfo=timezone.utc)
             timebox_minutes = (end - start).total_seconds() / 60
         except ValueError:
             logger.warning("could not parse timebox for timeout calculation, falling back to base timeout")

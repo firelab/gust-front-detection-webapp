@@ -9,9 +9,9 @@ from typing import Any, cast
 
 import nexradaws
 import redis
+from process_output import generate_geotiff_output
 
 from nfgda_service import NfgdaService
-from process_output import generate_geotiff_output
 
 logging.basicConfig(
     level=logging.INFO,
@@ -28,6 +28,7 @@ job_semaphore = asyncio.Semaphore(int(os.getenv("MAX_CONCURRENT_JOBS", "2")))
 
 def utc_now_str() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
 
 async def listen_for_jobs() -> None:
     """Poll Redis for jobs and dispatch them as async tasks.

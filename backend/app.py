@@ -78,7 +78,7 @@ def enable_auto_refresh_endpoint(station_id):
     """Enable continuous auto-refresh for a station for a duration in minutes."""
     try:
         duration_minutes = int(request.args.get("duration", "1440"))
-    except Exception:
+    except (TypeError, ValueError):
         return jsonify({"error": "Improper Duration Input"}), 400
 
     if duration_minutes <= 0:

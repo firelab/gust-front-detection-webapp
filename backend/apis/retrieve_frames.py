@@ -49,7 +49,7 @@ def get_frame_manifest_entry(job_dir: str, index: int) -> dict | None:
             with open(manifest_path) as f:
                 manifest = json.load(f)
             return manifest.get(str(index))
-        except Exception:
+        except (OSError, json.JSONDecodeError):
             return None
 
     return None
