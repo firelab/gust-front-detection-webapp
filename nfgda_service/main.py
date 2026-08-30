@@ -5,10 +5,11 @@ import redis
 import logging
 import uuid
 import nexradaws
+from typing import Any, cast
+from collections.abc import Iterator, Mapping
 from datetime import datetime, timedelta, timezone
-
-from nfgda_service import NfgdaService
-from process_output import generate_geotiff_output
+from .nfgda_service import NfgdaService
+from .process_output import generate_geotiff_output
 
 logging.basicConfig(
     level=logging.INFO,
@@ -16,7 +17,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-redis_client = redis.Redis(host=os.getenv("REDIS_HOST"), port=int(os.getenv("REDIS_PORT", "6379")), db=int(os.getenv("REDIS_DB", "0")), decode_responses=True)
+redis_client = redis.Redis(host=os.getenv("REDIS_HOST", "redis"), port=int(os.getenv("REDIS_PORT", "6379")), db=int(os.getenv("REDIS_DB", "0")), decode_responses=True)
+RedisHashMapping = Mapping[str, str | int]
 
 # semaphor manages how many jobs can run at once
 job_semaphore = asyncio.Semaphore(int(os.getenv("MAX_CONCURRENT_JOBS", "2")))
@@ -35,15 +37,13 @@ async def listen_for_jobs() -> None:
 
     while True:
         # periodic cleanup of expired job assets
-        await loop.run_in_executor(None, cleanup_expired_jobs)
+        await loop.run_in_executor(None, cleanup_expired_job_assets)
 
         # wait until there's capacity to process a job
         await job_semaphore.acquire()
 
         # dequeue with a timeout, run cleanup when idle
-        result = await loop.run_in_executor(
-            None, lambda: redis_client.brpop("job_queue", timeout=10)
-        )
+        result = await loop.run_in_executor(None, pop_queued_job)
 
         if result is None:
             job_semaphore.release()
@@ -59,7 +59,7 @@ async def process_job(job_id: str) -> None:
     """Process a single job after being acquired from the queue."""
 
     job_key = f"job:{job_id}"
-    job_fields = redis_client.hgetall(job_key)
+    job_fields = redis_hgetall(job_key)
     out_dir = format_output_directory(job_id)
 
     logger.info("processing job %s", job_id)
@@ -70,7 +70,7 @@ def process_geotiff_output(job_id: str) -> None:
     """Process the output of the NFGDA algorithm for a given job
     into a stack of GeoTIFFs for final display on the frontend."""
     
-    if redis_client.hget(f"job:{job_id}", "status") == "FAILED":
+    if redis_hget(f"job:{job_id}", "status") == "FAILED":
         return
 
     logger.info("generating GeoTIFF series for job %s", job_id)
@@ -78,11 +78,11 @@ def process_geotiff_output(job_id: str) -> None:
         
     if result is not None:
         logger.error("failed to generate GeoTIFF series for job %s. Error message: %s", job_id, result)
-        redis_client.hset(f"job:{job_id}", mapping={"status": "FAILED", "error_message": result})
+        redis_hset_mapping(f"job:{job_id}", {"status": "FAILED", "error_message": result})
     else:
         num_frames = len(os.listdir(f"/processed_data/{job_id}")) - 1  # subtract 1 for manifest.json
         logger.info("successfully generated GeoTIFF series for job %s", job_id)
-        redis_client.hset(f"job:{job_id}", mapping={"status": "COMPLETED", "num_frames": num_frames})
+        redis_hset_mapping(f"job:{job_id}", {"status": "COMPLETED", "num_frames": num_frames})
 
 async def run_and_release_job(job_id: str) -> None:
     """Run a job and release the semaphore when finished.
@@ -109,7 +109,7 @@ def sync_station_latest_from_job(job_id: str) -> None:
     of how the job was triggered (manual or auto-refresh).
     """
     job_key = f"job:{job_id}"
-    job_fields = redis_client.hgetall(job_key)
+    job_fields = redis_hgetall(job_key)
     if not job_fields:
         return
 
@@ -118,7 +118,7 @@ def sync_station_latest_from_job(job_id: str) -> None:
         return
 
     latest_key = f"station:latest:{station_id}"
-    existing = redis_client.hgetall(latest_key)
+    existing = redis_hgetall(latest_key)
 
     # Only update if this job is still the current latest for the station.
     # Auto-refresh may have already advanced to a newer job_id.
@@ -127,16 +127,12 @@ def sync_station_latest_from_job(job_id: str) -> None:
 
     final_status = job_fields.get("status", "FAILED")
     num_frames = job_fields.get("num_frames", "")
-    redis_client.hset(latest_key, mapping={
+    redis_hset_mapping(latest_key, {
         "status": final_status,
         "num_frames": num_frames,
     })
     logger.info("updated station:latest:%s status=%s num_frames=%s", station_id, final_status, num_frames)
 
-
-# ---------------------------------------------------------------------------
-# Auto-refresh polling loop
-# ---------------------------------------------------------------------------
 
 async def auto_refresh_loop() -> None:
     """Continuously poll S3 NEXRAD buckets for stations with auto-refresh enabled.
@@ -163,8 +159,8 @@ async def auto_refresh_loop() -> None:
 
         # Collect all stations with auto-refresh enabled
         enabled_stations = []
-        for key in redis_client.scan_iter(match="autorefresh:*"):
-            refresh_enabled = redis_client.hget(key, "refresh_enabled")
+        for key in redis_scan_iter(match="autorefresh:*"):
+            refresh_enabled = redis_hget(key, "refresh_enabled")
             if refresh_enabled == "true":
                 station_id = key.split(":", 1)[1]
                 enabled_stations.append(station_id)
@@ -189,7 +185,7 @@ async def _auto_refresh_station(station_id: str, aws_int, loop) -> None:
     NFGDA job using the 25-minute rolling timebox.
     """
     ar_key = f"autorefresh:{station_id}"
-    ar_fields = redis_client.hgetall(ar_key)
+    ar_fields = redis_hgetall(ar_key)
 
     # Skip if already processing — avoid overlapping jobs for the same station
     if ar_fields.get("status") == "PROCESSING":
@@ -239,14 +235,14 @@ async def _auto_refresh_station(station_id: str, aws_int, loop) -> None:
     job_key = f"job:{job_id}"
 
     # Check if this exact job was already run (same station + same timebox window)
-    if redis_client.exists(job_key):
+    if redis_exists(job_key):
         logger.info("auto-refresh: job %s already exists for %s, skipping", job_id, station_id)
         return
 
     # Register the job in Redis
     expiry_minutes = int(os.getenv("FILE_EXPIRATION_TIME", "1440"))
     expiry_timestamp = (now + timedelta(minutes=expiry_minutes)).strftime("%Y-%m-%dT%H:%M:%SZ")
-    redis_client.hset(job_key, mapping={
+    redis_hset_mapping(job_key, {
         "stationId": station_id,
         "startUtc": start_utc_str,
         "endUtc": end_utc_str,
@@ -255,7 +251,7 @@ async def _auto_refresh_station(station_id: str, aws_int, loop) -> None:
     })
 
     # Mark station as PROCESSING and update station:latest
-    redis_client.hset(ar_key, mapping={
+    redis_hset_mapping(ar_key, {
         "status": "PROCESSING",
         "current_job_id": job_id,
         "last_scan_time": new_last_scan_time,
@@ -274,11 +270,11 @@ async def _auto_refresh_station(station_id: str, aws_int, loop) -> None:
         job_semaphore.release()
 
     # Reflect the final outcome back to both records
-    final_status = redis_client.hget(job_key, "status") or "FAILED"
-    num_frames = redis_client.hget(job_key, "num_frames") or ""
+    final_status = redis_hget(job_key, "status") or "FAILED"
+    num_frames = redis_hget(job_key, "num_frames") or ""
 
-    redis_client.hset(ar_key, "status", "IDLE")
-    redis_client.hset(f"station:latest:{station_id}", mapping={
+    redis_hset_field(ar_key, "status", "IDLE")
+    redis_hset_mapping(f"station:latest:{station_id}", {
         "status": final_status,
         "num_frames": num_frames,
     })
@@ -288,7 +284,7 @@ async def _auto_refresh_station(station_id: str, aws_int, loop) -> None:
 def _write_station_latest_sync(station_id: str, job_id: str, source: str) -> None:
     """Write station:latest:<station_id> synchronously (called from async context)."""
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    redis_client.hset(f"station:latest:{station_id}", mapping={
+    redis_hset_mapping(f"station:latest:{station_id}", {
         "job_id": job_id,
         "created_at": now,
         "status": "PENDING",
@@ -303,7 +299,11 @@ def format_output_directory(job_id: str) -> str:
     os.makedirs(out_dir, exist_ok=True)
     return out_dir
 
-def cleanup_expired_jobs() -> None:
+def disable_autorefresh_on_expired_stations():
+    """Resets station redis values to disable auto-refresh after expiry period"""
+    pass
+
+def cleanup_expired_job_assets() -> None:
     """Scan Redis for job records whose asset_expiry_timestamp has passed.
 
     For each expired job:
@@ -312,8 +312,8 @@ def cleanup_expired_jobs() -> None:
     """
     now = datetime.now(timezone.utc)
 
-    for key in redis_client.scan_iter(match="job:*"):
-        expiry_str = redis_client.hget(key, "asset_expiry_timestamp")
+    for key in redis_scan_iter(match="job:*"):
+        expiry_str = redis_hget(key, "asset_expiry_timestamp")
         if not expiry_str:
             continue
 
@@ -338,7 +338,55 @@ def cleanup_expired_jobs() -> None:
                 logger.info("- removed %s", path)
 
         # remove the job record from redis
-        redis_client.delete(key)
+        redis_delete(key)
+
+def sync_redis_client() -> Any:
+    """Return the sync Redis client with broad redis-py annotations erased."""
+    return cast(Any, redis_client)
+
+
+def pop_queued_job() -> tuple[str, str] | None:
+    """Pop one queued job from Redis."""
+    return cast(
+        tuple[str, str] | None,
+        sync_redis_client().brpop(["job_queue"], timeout=10),
+    )
+
+
+def redis_hgetall(key: str) -> dict[str, str]:
+    """Read a Redis hash as decoded string fields."""
+    return cast(dict[str, str], sync_redis_client().hgetall(key))
+
+
+def redis_hget(key: str, field: str) -> str | None:
+    """Read a single decoded Redis hash field."""
+    return cast(str | None, sync_redis_client().hget(key, field))
+
+
+def redis_hset_mapping(key: str, mapping: RedisHashMapping) -> None:
+    """Write multiple Redis hash fields."""
+    sync_redis_client().hset(key, mapping=mapping)
+
+
+def redis_hset_field(key: str, field: str, value: str | int) -> None:
+    """Write one Redis hash field."""
+    sync_redis_client().hset(key, field, value)
+
+
+def redis_scan_iter(match: str) -> Iterator[str]:
+    """Scan Redis keys with decoded string results."""
+    return cast(Iterator[str], sync_redis_client().scan_iter(match=match))
+
+
+def redis_exists(key: str) -> bool:
+    """Return whether a Redis key exists."""
+    return bool(sync_redis_client().exists(key))
+
+
+def redis_delete(key: str) -> None:
+    """Delete a Redis key."""
+    sync_redis_client().delete(key)
+
 
 def main():
     asyncio.run(_run_all())
