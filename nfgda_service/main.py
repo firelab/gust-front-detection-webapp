@@ -1,13 +1,15 @@
+import asyncio
+import logging
 import os
 import shutil
-import asyncio
-import redis
-import logging
 import uuid
-import nexradaws
-from typing import Any, cast
 from collections.abc import Iterator, Mapping
 from datetime import datetime, timedelta, timezone
+from typing import Any, cast
+
+import nexradaws
+import redis
+
 from .nfgda_service import NfgdaService
 from .process_output import generate_geotiff_output
 
@@ -36,8 +38,9 @@ async def listen_for_jobs() -> None:
     loop = asyncio.get_running_loop()
 
     while True:
-        # periodic cleanup of expired job assets
+        # periodic cleanup of expired job assets and autorefresh stations
         await loop.run_in_executor(None, cleanup_expired_job_assets)
+        await loop.run_in_executor(None, disable_autorefresh_on_expired_stations)
 
         # wait until there's capacity to process a job
         await job_semaphore.acquire()
@@ -301,7 +304,32 @@ def format_output_directory(job_id: str) -> str:
 
 def disable_autorefresh_on_expired_stations():
     """Resets station redis values to disable auto-refresh after expiry period"""
-    pass
+    ar_stations = list(redis_scan_iter(match="autorefresh:*"))
+    if not ar_stations:
+        return
+
+    now = datetime.now(timezone.utc)
+
+    for station in ar_stations:
+        expiry = redis_hget(station, "auto_refresh_expiry")
+        if not expiry:
+            continue
+        try:
+            expiry = datetime.strptime(expiry, "%Y-%m-%dT%H:%M:%SZ").replace(
+                tzinfo=timezone.utc
+            )
+        except ValueError:
+            logger.warning(
+                "skipping %s due to malformed expiry timestamp: %s", station, expiry
+            )
+            continue
+
+        if now < expiry:
+            continue
+
+        redis_hset_field(station, "refresh_enabled", "false")
+        logger.info("disabled auto-refresh on station %s", station.split(":", 1)[1])
+
 
 def cleanup_expired_job_assets() -> None:
     """Scan Redis for job records whose asset_expiry_timestamp has passed.

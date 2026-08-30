@@ -1,7 +1,8 @@
 
-import os
 import json
-from flask import send_file, abort, make_response
+import os
+
+from flask import abort, make_response, send_file
 
 
 def get_frame(job_id: str, index: int):

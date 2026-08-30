@@ -1,14 +1,14 @@
 import io
+import json
 import re
 import ssl
-import zipfile
 import xml.etree.ElementTree as ET
-from typing import List
-from geojson import FeatureCollection, Point, Feature
+import zipfile
 from urllib.request import urlopen
+
 import certifi
 import redis
-import json
+from geojson import Feature, FeatureCollection, Point
 
 # KML namespace used in the XML tags
 KML_NAMESPACE = "{http://www.opengis.net/kml/2.2}"
@@ -72,7 +72,7 @@ class StationService:
     def parse_stations_from_kml(self, kml_content: bytes) -> FeatureCollection:
         """Parse KML/XML and return a GeoJSON FeatureCollection of stations."""
         root = ET.fromstring(kml_content)
-        stations: List[Feature] = []
+        stations: list[Feature] = []
         redis_mapping = {}
 
         # Iterate through all Placemark elements in the KML

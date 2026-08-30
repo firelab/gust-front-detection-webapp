@@ -3,16 +3,16 @@ into a stack of GeoTIFFs for final display on the frontend.
 
 Based on the projectRadarData.py script provided by Natalie. """
 
-import numpy as np
-import matplotlib.colors as mcolors
-from osgeo import gdal, osr
-from scipy.ndimage import binary_dilation
-from skimage.morphology import skeletonize, disk
-
-import os
-import redis
 import json
 import logging
+import os
+
+import matplotlib.colors as mcolors
+import numpy as np
+import redis
+from osgeo import gdal, osr
+from scipy.ndimage import binary_dilation
+from skimage.morphology import disk, skeletonize
 
 logger = logging.getLogger(__name__)
 

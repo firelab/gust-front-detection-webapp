@@ -22,6 +22,8 @@ services:
       - FILE_EXPIRATION_TIME=${FILE_EXPIRATION_TIME}
       - AUTO_REFRESH_POLL_INTERVAL=${AUTO_REFRESH_POLL_INTERVAL}
       - STATION_JOB_COOLDOWN_MINUTES=${STATION_JOB_COOLDOWN_MINUTES}
+      - ALGO_BASE_TIMEOUT_SECONDS=${ALGO_BASE_TIMEOUT_SECONDS}
+      - ALGO_TIMEOUT_MINUTE_BUGG=${ALGO_TIMEOUT_MINUTE_BUFF}
     volumes:
       - ./nfgda_output:/nfgda_output
       - ./processed_data:/processed_data
@@ -52,6 +54,7 @@ services:
       - REDIS_DB=${REDIS_DB}
       - MAX_JOB_DURATION=${MAX_JOB_DURATION}
       - STATION_JOB_COOLDOWN_MINUTES=${STATION_JOB_COOLDOWN_MINUTES}
+      - MAX_AUTO_REFRESH_DURATION=${MAX_AUTO_REFRESH_DURATION}
     volumes:
       - ./nfgda_output:/nfgda_output
       - ./processed_data:/processed_data

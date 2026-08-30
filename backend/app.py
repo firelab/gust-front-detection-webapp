@@ -1,10 +1,16 @@
+import os
+
 import redis
-from flask import Flask, jsonify, request
-from apis.stations import list_stations_api
-from apis.run_request import send_job_to_redis_queue
-from apis.status import get_job_status
+from apis.auto_refresh import (
+    disable_auto_refresh,
+    enable_auto_refresh,
+    get_auto_refresh_status,
+)
 from apis.retrieve_frames import get_frame
-from apis.auto_refresh import enable_auto_refresh, disable_auto_refresh, get_auto_refresh_status
+from apis.run_request import send_job_to_redis_queue
+from apis.stations import list_stations_api
+from apis.status import get_job_status
+from flask import Flask, jsonify, request
 
 app = Flask(__name__)
 
@@ -56,8 +62,26 @@ def status_endpoint():
 # Auto-Refresh Toggle API
 @app.route("/apis/auto-refresh/<station_id>", methods=["POST"])
 def enable_auto_refresh_endpoint(station_id):
-    """Enable continuous auto-refresh for a station. Idempotent."""
-    return enable_auto_refresh(redis_client, station_id)
+    """Enable continuous auto-refresh for a station for a duration in minutes."""
+    try:
+        duration_minutes = int(request.args.get("duration", "1440"))
+    except Exception:
+        return jsonify({"error": "Improper Duration Input"}), 400
+
+    if duration_minutes <= 0:
+        return jsonify({"error": "Auto-refresh duration must be positive"}), 400
+
+    try:
+        max_duration_minutes = int(os.getenv("MAX_AUTO_REFRESH_DURATION") or "10080")
+    except ValueError:
+        return jsonify({"error": "Invalid MAX_AUTO_REFRESH_DURATION config"}), 500
+
+    if duration_minutes > max_duration_minutes:
+        return jsonify({
+            "error": "requested auto-refresh duration exceeds maximum allowed (7 days)"
+        }), 400
+
+    return enable_auto_refresh(redis_client, station_id, duration_minutes)
 
 
 @app.route("/apis/auto-refresh/<station_id>", methods=["DELETE"])
@@ -74,4 +98,3 @@ def get_auto_refresh_status_endpoint(station_id):
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=8001)
-

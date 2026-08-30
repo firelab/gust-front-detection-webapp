@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta, timezone
 
 from flask import jsonify
 from src.station_service.station_service import StationService
@@ -7,7 +8,7 @@ def _autorefresh_key(station_id: str) -> str:
     return f"autorefresh:{station_id}"
 
 
-def enable_auto_refresh(redis_client, station_id: str):
+def enable_auto_refresh(redis_client, station_id: str, duration_minutes: int):
     """
     Enable auto-refresh for a station.
 
@@ -23,6 +24,9 @@ def enable_auto_refresh(redis_client, station_id: str):
         { "error": "<message>" }, 400/404
     """
     station_id = station_id.upper().strip()
+    autorefresh_expiry = (
+        datetime.now(timezone.utc) + timedelta(minutes=duration_minutes)
+    ).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     try:
         StationService(redis_client).get_station(station_id)
@@ -39,9 +43,14 @@ def enable_auto_refresh(redis_client, station_id: str):
         "status": existing.get("status", "IDLE"),
         "last_scan_time": existing.get("last_scan_time", ""),
         "current_job_id": existing.get("current_job_id", ""),
+        "auto_refresh_expiry": autorefresh_expiry,
     })
 
-    return jsonify({"station_id": station_id, "refresh_enabled": True}), 200
+    return jsonify({
+        "station_id": station_id,
+        "refresh_enabled": True,
+        "auto_refresh_expiry": autorefresh_expiry,
+    }), 200
 
 
 def disable_auto_refresh(redis_client, station_id: str):
@@ -113,4 +122,5 @@ def get_auto_refresh_status(redis_client, station_id: str):
         "status": fields.get("status", "IDLE"),
         "current_job_id": fields.get("current_job_id", ""),
         "last_scan_time": fields.get("last_scan_time", ""),
+        "auto_refresh_expiry": fields.get("auto_refresh_expiry", ""),
     }), 200
