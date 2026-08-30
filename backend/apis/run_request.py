@@ -30,11 +30,17 @@ def send_job_to_redis_queue(redis_client, request_fields: dict):
     station_id = request_fields.get("stationId")
     if not station_id:
         return jsonify({"error": "Missing stationId request field"}), 400
+    station_id = station_id.upper().strip()
+    request_fields["stationId"] = station_id
     
     try:
         StationService(redis_client).get_station(station_id)
     except ValueError:
         return jsonify({"error": f"Invalid station ID: {station_id}"}), 400
+
+    auto_refresh_response = get_auto_refresh_latest_job(redis_client, station_id)
+    if auto_refresh_response is not None:
+        return auto_refresh_response
     
     # Station-level cooldown check
     cooldown_response = check_station_cooldown(redis_client, station_id)
@@ -73,8 +79,54 @@ def send_job_to_redis_queue(redis_client, request_fields: dict):
     # return this job instead of creating another one
     _write_station_latest(redis_client, station_id, job_id, source="manual")
 
-    # the cat's meow
     return jsonify({"job_id": job_id}), 202
+
+
+def get_auto_refresh_latest_job(redis_client, station_id: str):
+    """Return the station's latest job when auto-refresh is enabled."""
+    auto_refresh_fields = redis_client.hgetall(f"autorefresh:{station_id}")
+    if auto_refresh_fields.get("refresh_enabled") != "true":
+        return None
+
+    latest_response = build_latest_job_response(
+        redis_client,
+        station_id,
+        source=auto_refresh_fields.get("source", "auto_refresh"),
+    )
+    if latest_response is not None:
+        return latest_response
+
+    current_job_id = auto_refresh_fields.get("current_job_id", "")
+    if not current_job_id:
+        return None
+
+    return build_job_response(
+        redis_client,
+        current_job_id,
+        source="auto_refresh",
+        cached=True,
+    )
+
+
+def get_station_latest_job(redis_client, station_id: str):
+    """Return the most recent job for a station without creating a new one."""
+    station_id = station_id.upper().strip()
+
+    try:
+        StationService(redis_client).get_station(station_id)
+    except ValueError:
+        return jsonify({"error": f"Invalid station ID: {station_id}"}), 400
+
+    latest = redis_client.hgetall(f"station:latest:{station_id}")
+    response = build_latest_job_response(
+        redis_client,
+        station_id,
+        source=latest.get("source", "manual"),
+    )
+    if response is None:
+        return jsonify({"error": f"No recent job found for station {station_id}"}), 404
+
+    return response
 
 
 def check_station_cooldown(redis_client, station_id: str):
@@ -108,16 +160,42 @@ def check_station_cooldown(redis_client, station_id: str):
         return None
 
     # Within the cooldown window: return the existing job regardless of status
-    job_id = latest.get("job_id", "")
-    status = latest.get("status", "")
-    source = latest.get("source", "manual")
+    return build_latest_job_response(
+        redis_client,
+        station_id,
+        source=latest.get("source", "manual"),
+    )
 
+
+def build_latest_job_response(redis_client, station_id: str, source: str):
+    """Build a response for station:latest:<station_id>, if it points to a job."""
+    latest = redis_client.hgetall(f"station:latest:{station_id}")
+    job_id = latest.get("job_id", "")
+    if not job_id:
+        return None
+
+    return build_job_response(redis_client, job_id, source=source, cached=True)
+
+
+def build_job_response(
+    redis_client,
+    job_id: str,
+    source: str,
+    cached: bool,
+):
+    """Build a run endpoint response for an existing job."""
+    job_fields = redis_client.hgetall(f"job:{job_id}")
+    if not job_fields:
+        return None
+
+    status = job_fields.get("status", "")
     http_status = 200 if status in ("COMPLETED", "FAILED") else 202
     return jsonify({
         "job_id": job_id,
         "status": status,
         "source": source,
-        "cached": True,
+        "cached": cached,
+        "num_frames": job_fields.get("num_frames", ""),
     }), http_status
 
 

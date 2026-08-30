@@ -10,8 +10,8 @@ from typing import Any, cast
 import nexradaws
 import redis
 
-from .nfgda_service import NfgdaService
-from .process_output import generate_geotiff_output
+from nfgda_service import NfgdaService
+from process_output import generate_geotiff_output
 
 logging.basicConfig(
     level=logging.INFO,
@@ -24,6 +24,10 @@ RedisHashMapping = Mapping[str, str | int]
 
 # semaphor manages how many jobs can run at once
 job_semaphore = asyncio.Semaphore(int(os.getenv("MAX_CONCURRENT_JOBS", "2")))
+
+
+def utc_now_str() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 async def listen_for_jobs() -> None:
     """Poll Redis for jobs and dispatch them as async tasks.
@@ -134,6 +138,15 @@ def sync_station_latest_from_job(job_id: str) -> None:
         "status": final_status,
         "num_frames": num_frames,
     })
+
+    autorefresh_key = f"autorefresh:{station_id}"
+    autorefresh_fields = redis_hgetall(autorefresh_key)
+    if autorefresh_fields.get("current_job_id") == job_id:
+        redis_hset_mapping(autorefresh_key, {
+            "status": "IDLE",
+            "last_updated_at": utc_now_str(),
+        })
+
     logger.info("updated station:latest:%s status=%s num_frames=%s", station_id, final_status, num_frames)
 
 
@@ -258,6 +271,7 @@ async def _auto_refresh_station(station_id: str, aws_int, loop) -> None:
         "status": "PROCESSING",
         "current_job_id": job_id,
         "last_scan_time": new_last_scan_time,
+        "last_updated_at": utc_now_str(),
     })
     _write_station_latest_sync(station_id, job_id, source="auto_refresh")
 
@@ -276,7 +290,10 @@ async def _auto_refresh_station(station_id: str, aws_int, loop) -> None:
     final_status = redis_hget(job_key, "status") or "FAILED"
     num_frames = redis_hget(job_key, "num_frames") or ""
 
-    redis_hset_field(ar_key, "status", "IDLE")
+    redis_hset_mapping(ar_key, {
+        "status": "IDLE",
+        "last_updated_at": utc_now_str(),
+    })
     redis_hset_mapping(f"station:latest:{station_id}", {
         "status": final_status,
         "num_frames": num_frames,
@@ -286,7 +303,7 @@ async def _auto_refresh_station(station_id: str, aws_int, loop) -> None:
 
 def _write_station_latest_sync(station_id: str, job_id: str, source: str) -> None:
     """Write station:latest:<station_id> synchronously (called from async context)."""
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    now = utc_now_str()
     redis_hset_mapping(f"station:latest:{station_id}", {
         "job_id": job_id,
         "created_at": now,

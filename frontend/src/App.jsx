@@ -6,18 +6,26 @@ import {
   Button,
   Checkbox,
   FormControl,
+  FormControlLabel,
   InputLabel,
   MenuItem,
   Select,
   Slider,
+  TextField,
 } from "@mui/material";
 // MUI
 import { DateTimePicker, LocalizationProvider } from "@mui/x-date-pickers";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import LeafletMap from "./components/LeafletMap";
 import RadarStationDropdown from "./components/RadarStationDropdown";
 import dayjs from "./utils/dayjsConfig";
+
+const AUTO_REFRESH_UNIT_MINUTES = {
+  minutes: 1,
+  hours: 60,
+  days: 1440,
+};
 
 export default function App() {
   // User Selection State
@@ -30,10 +38,15 @@ export default function App() {
   const [timezone, setTimezone] = useState(dayjs.tz.guess());
   const [selectedDuration, setSelectedDuration] = useState("60");
   const [geotiffOpacity, setGeotiffOpacity] = useState("80");
+  const [autoRefreshOnSubmit, setAutoRefreshOnSubmit] = useState(false);
+  const [autoRefreshDurationValue, setAutoRefreshDurationValue] = useState("24");
+  const [autoRefreshDurationUnit, setAutoRefreshDurationUnit] = useState("hours");
+  const [autoRefreshStations, setAutoRefreshStations] = useState([]);
 
   // API State
   const [jobStatus, setJobStatus] = useState("NONE");
   const [jobId, setjobId] = useState("");
+  const [jobStationId, setJobStationId] = useState("");
   const [numFrames, setNumFrames] = useState(0);
   const [frames, setFrames] = useState([]);
   const [errorMessage, setErrorMessage] = useState("");
@@ -44,7 +57,123 @@ export default function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const playbackRef = useRef(null);
 
+  const stationLookup = useMemo(() => {
+    return new Map(
+      stations
+        .filter((station) => station?.properties?.station_id)
+        .map((station) => [station.properties.station_id, station]),
+    );
+  }, [stations]);
+
+  const enabledAutoRefreshStations = useMemo(() => {
+    return autoRefreshStations.map((autoRefreshStation) => ({
+      ...autoRefreshStation,
+      station: stationLookup.get(autoRefreshStation.station_id),
+    }));
+  }, [autoRefreshStations, stationLookup]);
+
+  const selectedStationId = selectedStation?.properties?.station_id || "";
+  const selectedAutoRefreshStation = enabledAutoRefreshStations.find(
+    (autoRefreshStation) => autoRefreshStation.station_id === selectedStationId,
+  );
+  const currentJobBelongsToSelectedStation = jobStationId === selectedStationId;
+  const selectedStationIsProcessing =
+    (currentJobBelongsToSelectedStation &&
+      ["REQUESTED", "PENDING", "PROCESSING"].includes(jobStatus)) ||
+    selectedAutoRefreshStation?.has_active_job;
+  const selectedStationHasAutoRefresh = Boolean(selectedAutoRefreshStation);
+  const radarDataButtonDisabled =
+    selectedStationIsProcessing || selectedStationHasAutoRefresh;
+  const radarDataButtonText = selectedStationIsProcessing
+    ? "Station Processing"
+    : selectedStationHasAutoRefresh
+      ? "Auto-Refresh Enabled"
+      : "Get Radar Data";
+
   // --------------------------------------- HANDLERS ----------------------------------------
+
+  const fetchAutoRefreshStations = useCallback(async () => {
+    try {
+      const response = await fetch("/apis/auto-refresh");
+      if (!response.ok) return;
+
+      const data = await response.json();
+      setAutoRefreshStations(
+        Array.isArray(data?.stations) ? data.stations : [],
+      );
+    } catch (err) {
+      console.error("Auto-refresh station fetch error:", err);
+    }
+  }, []);
+
+  function getAutoRefreshDurationMinutes() {
+    const durationValue = Number(autoRefreshDurationValue);
+    const unitMinutes = AUTO_REFRESH_UNIT_MINUTES[autoRefreshDurationUnit];
+
+    if (!Number.isFinite(durationValue) || durationValue <= 0 || !unitMinutes) {
+      throw new Error("Please enter a positive auto-refresh duration.");
+    }
+
+    return Math.ceil(durationValue * unitMinutes);
+  }
+
+  function formatAutoRefreshTimestamp(timestamp) {
+    if (!timestamp) return "Not updated yet";
+
+    return dayjs(timestamp).tz(timezone).format("MMM D, HH:mm z");
+  }
+
+  function loadJobResponse(jobData, stationId = "") {
+    setjobId(jobData.job_id);
+    setJobStationId(stationId || jobData.stationId || "");
+    setJobStatus(jobData.status || "PENDING");
+    setNumFrames(jobData.num_frames ? Number(jobData.num_frames) : 0);
+  }
+
+  async function loadLatestStationJob(stationId) {
+    const response = await fetch(`/apis/stations/${stationId}/latest-job`);
+
+    if (response.status === 404) {
+      setJobStatus("NONE");
+      setJobStationId("");
+      return;
+    }
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const errorMsg =
+        errorData.error ||
+        errorData.message ||
+        `Latest station job check failed (HTTP ${response.status})`;
+      setErrorMessage(errorMsg);
+      setJobStatus("FAILED");
+      return;
+    }
+
+    const data = await response.json();
+    loadJobResponse(data, stationId);
+  }
+
+  async function selectMapStation(station) {
+    setSelectedStation(station);
+    setErrorMessage("");
+    setjobId("");
+    setJobStationId("");
+    setJobStatus("NONE");
+    setNumFrames(0);
+    setFrames([]);
+
+    const stationId = station?.properties?.station_id;
+    if (!stationId) return;
+
+    try {
+      await loadLatestStationJob(stationId);
+    } catch (err) {
+      console.error("Latest station job fetch error:", err);
+      setJobStatus("FAILED");
+      setErrorMessage("A network error occurred. Please try again.");
+    }
+  }
 
   // requests a job from /backend/apis/run_request.py and recieves a job_id and response code
   const fetchRadarData = async () => {
@@ -61,6 +190,15 @@ export default function App() {
           `Please select a start time at least ${selectedDuration} minutes in the past`,
         );
         return;
+      }
+      let autoRefreshDurationMinutes = null;
+      if (autoRefreshOnSubmit) {
+        try {
+          autoRefreshDurationMinutes = getAutoRefreshDurationMinutes();
+        } catch (err) {
+          setErrorMessage(err.message);
+          return;
+        }
       }
       setErrorMessage("");
       const durationMinutes = Number(selectedDuration);
@@ -89,6 +227,7 @@ export default function App() {
       // ---- reset state ----
       setJobStatus("REQUESTED");
       setjobId("");
+      setJobStationId(selectedStation.properties.station_id);
       setNumFrames(0);
       setFrames([]);
 
@@ -115,7 +254,38 @@ export default function App() {
       }
 
       const data = await response.json();
-      setjobId(data.job_id);
+      loadJobResponse(data, selectedStation.properties.station_id);
+
+      if (autoRefreshOnSubmit) {
+        const stationId = selectedStation.properties.station_id;
+        const autoRefreshResponse = await fetch(
+          [
+            `/apis/auto-refresh/${stationId}`,
+            `?duration=${autoRefreshDurationMinutes}`,
+            `&job_id=${encodeURIComponent(data.job_id)}`,
+          ].join(""),
+          {
+            method: "POST",
+            headers: {
+              Accept: "application/json",
+            },
+          },
+        );
+
+        if (!autoRefreshResponse.ok) {
+          const errorData = await autoRefreshResponse.json().catch(() => ({}));
+          const autoRefreshError =
+            errorData.error ||
+            errorData.message ||
+            `HTTP ${autoRefreshResponse.status}`;
+          setErrorMessage(
+            `Radar request was submitted, but auto-refresh was not enabled: ${autoRefreshError}`,
+          );
+          return;
+        }
+
+        fetchAutoRefreshStations();
+      }
     } catch (err) {
       console.error("Fetch Error:", err);
       setJobStatus("FAILED");
@@ -124,6 +294,16 @@ export default function App() {
       }
     }
   };
+
+  function selectAutoRefreshStation(autoRefreshStation) {
+    const station = autoRefreshStation.station;
+    if (!station) {
+      setErrorMessage(`Station ${autoRefreshStation.station_id} is not loaded.`);
+      return;
+    }
+
+    selectMapStation(station);
+  }
 
   // fetch frames once the job is completed and the jobId and numFrames are set
   useEffect(() => {
@@ -190,6 +370,12 @@ export default function App() {
     }
     loadStations();
   }, []);
+
+  useEffect(() => {
+    fetchAutoRefreshStations();
+    const intervalId = setInterval(fetchAutoRefreshStations, 30000);
+    return () => clearInterval(intervalId);
+  }, [fetchAutoRefreshStations]);
 
   // get the status of the job from APIs/job_status every 5 seconds until the job is completed or failed
   useEffect(() => {
@@ -360,19 +546,61 @@ export default function App() {
                 </div>
               </LocalizationProvider>
             </div>
+            <div className="mt-3 max-w-92 outline-1 outline-gray-300 rounded-md p-3">
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={autoRefreshOnSubmit}
+                    onChange={(event) =>
+                      setAutoRefreshOnSubmit(event.target.checked)
+                    }
+                  />
+                }
+                label="Set station to auto-refresh"
+              />
+              <div className="flex gap-2">
+                <TextField
+                  disabled={!autoRefreshOnSubmit}
+                  label="For"
+                  type="number"
+                  value={autoRefreshDurationValue}
+                  onChange={(event) =>
+                    setAutoRefreshDurationValue(event.target.value)
+                  }
+                  slotProps={{
+                    htmlInput: {
+                      min: 1,
+                      step: 1,
+                    },
+                  }}
+                  className="w-24 shrink-0"
+                />
+                <FormControl className="min-w-36 flex-1">
+                  <InputLabel>Unit</InputLabel>
+                  <Select
+                    disabled={!autoRefreshOnSubmit}
+                    label="Unit"
+                    value={autoRefreshDurationUnit}
+                    onChange={(event) =>
+                      setAutoRefreshDurationUnit(event.target.value)
+                    }
+                  >
+                    <MenuItem value="minutes">Minutes</MenuItem>
+                    <MenuItem value="hours">Hours</MenuItem>
+                    <MenuItem value="days">Days</MenuItem>
+                  </Select>
+                </FormControl>
+              </div>
+            </div>
           </div>
           {/* Fetch Button */}
           <Button
             className="w-full max-w-92 h-14"
             onClick={fetchRadarData}
             variant="contained"
-            loading={
-              jobStatus === "REQUESTED" ||
-              jobStatus === "PROCESSING" ||
-              jobStatus === "PENDING"
-            }
+            disabled={radarDataButtonDisabled}
           >
-            Get Radar Data
+            {radarDataButtonText}
           </Button>
           {jobStatus === "PROCESSING" && (
             <p>
@@ -388,29 +616,58 @@ export default function App() {
           )}
           {errorMessage && <p className="font-bold">{errorMessage}</p>}
 
-          {/* Legend */}
-          <div className="h-full max-h-10 ">
+          <div className="max-w-92 outline-1 outline-gray-300 rounded-md p-4">
+            <p className="text-lg font-bold pb-2">
+              Current Auto-Refreshed Stations
+            </p>
+            {enabledAutoRefreshStations.length === 0 ? (
+              <p className="text-sm text-gray-600">
+                No stations are currently auto-refreshing.
+              </p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {enabledAutoRefreshStations.map((autoRefreshStation) => {
+                  const station = autoRefreshStation.station;
+                  const stationName =
+                    station?.properties?.name || autoRefreshStation.station_id;
+                  const lastUpdated = formatAutoRefreshTimestamp(
+                    autoRefreshStation.last_updated_at ||
+                    autoRefreshStation.last_scan_time,
+                  );
+                  const expiry = autoRefreshStation.auto_refresh_expiry
+                    ? dayjs(autoRefreshStation.auto_refresh_expiry)
+                      .tz(timezone)
+                      .format("MMM D, HH:mm z")
+                    : "";
+
+                  return (
+                    <button
+                      key={autoRefreshStation.station_id}
+                      type="button"
+                      className={[
+                        "text-left rounded-md outline-1 outline-gray-200 p-2",
+                        "hover:bg-gray-100 cursor-pointer",
+                      ].join(" ")}
+                      onClick={() => selectAutoRefreshStation(autoRefreshStation)}
+                    >
+                      <span className="block font-bold">
+                        {stationName} ({autoRefreshStation.station_id})
+                      </span>
+                      <span className="block text-sm text-gray-600">
+                        Updated: {lastUpdated}
+                        {expiry ? ` until ${expiry}` : ""}
+                      </span>
+                      {autoRefreshStation.has_active_job && (
+                        <span className="block text-sm font-bold text-lime-600">
+                          FRESH JOB RUNNING, STAND BY
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
-          {numFrames !== 0 && <div className="hidden md:flex outline-1 outline-gray-300 rounded-md p-4 flex-col">
-            <p className="text-xl font-bold pb-2">Legend</p>
-            <div className="flex mb-2">
-              <div className="rounded-full shadow-md bg-red-500 w-10 h-full mr-3 "></div>
-              <p>Detected Gust Fronts</p>
-            </div>
-            <p className="font-bold mb-2">Forcasted Gust Front Probability</p>
-            <div className="flex mb-2">
-              <div className="rounded-full shadow-md bg-amber-500 w-10 h-full mr-3"></div>
-              <p>{"> 30% Confidence"}</p>
-            </div>
-            <div className="flex mb-2">
-              <div className="rounded-full shadow-md bg-cyan-300 w-10 h-full mr-3"></div>
-              <p>{"> 50% Confidence"}</p>
-            </div>
-            <div className="flex">
-              <div className="rounded-full shadow-md bg-purple-700 w-10 h-full mr-3"></div>
-              <p>{"> 75% Confidence"}</p>
-            </div>
-          </div>}
 
           {/* Playback Controls */}
           {/* The CSS is a little cursed. */}
@@ -440,7 +697,7 @@ export default function App() {
                             .format("YYYY-MM-DD HH:mm z")
                           : "No timestamp"
                       }
-                      marks={frames.map((frame, i) => ({
+                      marks={frames.map((frame) => ({
                         value: frame.sliderValue,
                       }))}
                     />
@@ -475,24 +732,14 @@ export default function App() {
         </div>
 
         <div className="bg-gray-50 min-h-100 w-full">
-          <div
-            className={
-              jobStatus === "PROCESSING" ||
-                jobStatus === "REQUESTED" ||
-                jobStatus === "PENDING"
-                ? "opacity-50"
-                : ""
-            }
-          >
-            <LeafletMap
-              stations={stations}
-              selectedStation={selectedStation}
-              setSelectedStation={setSelectedStation}
-              frames={frames}
-              currentFrameIndex={currentFrameIndex}
-              opacity={geotiffOpacity}
-            />
-          </div>
+          <LeafletMap
+            stations={stations}
+            selectedStation={selectedStation}
+            setSelectedStation={selectMapStation}
+            frames={frames}
+            currentFrameIndex={currentFrameIndex}
+            opacity={geotiffOpacity}
+          />
         </div>
       </div>
       <footer className="z-999 m-4 absolute bottom-0 left-0 hidden md:block shadow-xl hover:shadow-sm transition-all">
